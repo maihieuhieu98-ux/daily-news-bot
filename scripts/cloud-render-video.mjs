@@ -5,8 +5,16 @@ import https from 'node:https';
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
-const ARTICLE_URL = process.env.ARTICLE_URL;
-const ARTICLE_TITLE = process.env.ARTICLE_TITLE || 'Tin Tức Thời Sự';
+let ARTICLE_URL = process.env.ARTICLE_URL;
+let ARTICLE_TITLE = process.env.ARTICLE_TITLE;
+const NEWS_INDEX = parseInt(process.env.NEWS_INDEX || '1', 10);
+
+const RSS_FEEDS = [
+  'https://baochinhphu.vn/thoi-su.rss',
+  'https://baochinhphu.vn/chinh-sach-moi.rss',
+  'https://baochinhphu.vn/kinh-te.rss',
+  'https://baochinhphu.vn/home.rss'
+];
 
 function execCommand(cmd, args, cwd = process.cwd()) {
   return new Promise((resolve, reject) => {
@@ -86,7 +94,53 @@ async function searchAdditionalImages(query, neededCount) {
   return results;
 }
 
+async function resolveArticle() {
+  if (ARTICLE_URL && ARTICLE_URL.startsWith('http')) {
+    return;
+  }
+
+  console.log(`[RESOLVE] Lấy bài báo theo chỉ số: News Index = ${NEWS_INDEX}...`);
+  const allItems = [];
+  await Promise.all(RSS_FEEDS.map(async (url) => {
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      const xml = await res.text();
+      const rawItems = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+      for (const item of rawItems) {
+        const title = cleanHtml((item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/) || [])[1] || '');
+        const link = cleanHtml((item.match(/<link><!\[CDATA\[(.*?)\]\]><\/link>/) || item.match(/<link>(.*?)<\/link>/) || [])[1] || '');
+        const pubDate = cleanHtml((item.match(/<pubDate><!\[CDATA\[(.*?)\]\]><\/pubDate>/) || item.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || '');
+        if (title && link) {
+          allItems.push({ title, link, pubDate, time: pubDate ? new Date(pubDate).getTime() : 0 });
+        }
+      }
+    } catch (e) {}
+  }));
+
+  allItems.sort((a, b) => (b.time || 0) - (a.time || 0));
+
+  const seen = new Set();
+  const unique = [];
+  for (const it of allItems) {
+    if (!seen.has(it.link)) {
+      seen.add(it.link);
+      unique.push(it);
+    }
+  }
+
+  const selected = unique[NEWS_INDEX - 1] || unique[0];
+  if (!selected) {
+    throw new Error('Không tìm thấy bài viết từ nguồn Báo Chính Phủ');
+  }
+
+  ARTICLE_URL = selected.link;
+  ARTICLE_TITLE = selected.title;
+  console.log(`[RESOLVED] Đã chọn bài: "${ARTICLE_TITLE}" - ${ARTICLE_URL}`);
+}
+
 async function main() {
+  await resolveArticle();
+
   console.log('🚀 CLOUD RENDER STARTED...');
   console.log('Article:', ARTICLE_TITLE);
   console.log('URL:', ARTICLE_URL);
