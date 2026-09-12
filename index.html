@@ -3,50 +3,77 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Điều Khiển Tin Tức & Video 24/7</title>
+  <title>Điều Khiển Tin Tức & Sản Xuất Video 24/7</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-    body { background: #0f172a; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px 16px; }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; width: 100%; max-width: 450px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); margin-bottom: 20px; }
-    .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.15); color: #4ade80; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    body { background: #0b0f19; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px 16px; }
+    .card { background: #161f30; border: 1px solid #283548; border-radius: 20px; width: 100%; max-width: 460px; padding: 22px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); margin-bottom: 18px; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.15); color: #4ade80; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
     .dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 10px #22c55e; animation: pulse 2s infinite; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-    h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; color: #ffffff; }
-    p.sub { font-size: 14px; color: #94a3b8; margin-bottom: 24px; line-height: 1.4; }
-    .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 18px 20px; border-radius: 16px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; margin-bottom: 16px; }
-    .btn-news { background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #ffffff; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4); }
+    h1 { font-size: 20px; font-weight: 800; margin-bottom: 6px; color: #ffffff; }
+    p.sub { font-size: 13px; color: #94a3b8; margin-bottom: 20px; line-height: 1.45; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 16px 18px; border-radius: 14px; border: none; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; }
+    .btn-news { background: linear-gradient(135deg, #0284c7, #0369a1); color: #ffffff; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4); }
     .btn-news:active { transform: scale(0.98); }
-    .btn-video { background: linear-gradient(135deg, #ef4444, #b91c1c); color: #ffffff; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4); }
+    .btn-video { background: linear-gradient(135deg, #dc2626, #991b1b); color: #ffffff; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.4); margin-top: 14px; }
     .btn-video:active { transform: scale(0.98); }
-    .select-group { margin-bottom: 16px; }
-    label { display: block; font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 8px; }
-    select { width: 100%; background: #0f172a; border: 1.5px solid #475569; color: #ffffff; padding: 14px 16px; border-radius: 12px; font-size: 15px; font-weight: 600; outline: none; }
-    .alert { padding: 14px 16px; border-radius: 12px; font-size: 14px; line-height: 1.4; margin-top: 16px; display: none; }
-    .alert.success { background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #4ade80; }
+    
+    .form-group { margin-bottom: 14px; text-align: left; }
+    label { display: block; font-size: 13px; font-weight: 700; color: #cbd5e1; margin-bottom: 6px; }
+    input[type="url"], select { width: 100%; background: #0b1120; border: 1.5px solid #334155; color: #ffffff; padding: 14px 14px; border-radius: 12px; font-size: 14px; outline: none; transition: border 0.2s; }
+    input[type="url"]:focus, select:focus { border-color: #38bdf8; }
+    .divider { display: flex; align-items: center; text-align: center; margin: 16px 0; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+    .divider::before, .divider::after { content: ''; flex: 1; border-bottom: 1px solid #283548; }
+    .divider::before { margin-right: 10px; }
+    .divider::after { margin-left: 10px; }
+
+    .alert { padding: 14px 16px; border-radius: 12px; font-size: 13px; line-height: 1.45; margin-top: 14px; display: none; }
+    .alert.success { background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #4ade80; display: block; }
     .alert.loading { background: rgba(14, 165, 233, 0.15); border: 1px solid #0ea5e9; color: #38bdf8; display: block; }
-    .alert.error { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; }
-    .footer { text-align: center; font-size: 12px; color: #64748b; margin-top: auto; padding-top: 20px; }
+    .alert.error { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; display: block; }
+
+    /* Confirmation Modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 999; }
+    .modal-overlay.active { display: flex; }
+    .modal { background: #1e293b; border: 1px solid #475569; border-radius: 20px; width: 100%; max-width: 400px; padding: 22px; text-align: center; box-shadow: 0 20px 40px rgba(0,0,0,0.8); animation: zoomIn 0.2s ease; }
+    @keyframes zoomIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal h2 { font-size: 18px; margin-bottom: 10px; color: #ffffff; }
+    .modal p { font-size: 13px; color: #94a3b8; margin-bottom: 14px; line-height: 1.4; }
+    .target-preview { background: #0b1120; border: 1px solid #334155; padding: 10px 12px; border-radius: 10px; font-size: 12px; color: #38bdf8; word-break: break-all; margin-bottom: 18px; text-align: left; }
+    .modal-btns { display: flex; gap: 10px; }
+    .btn-confirm { flex: 1; background: #22c55e; color: #000000; font-weight: 800; padding: 14px; border-radius: 12px; border: none; cursor: pointer; font-size: 14px; }
+    .btn-cancel { flex: 1; background: #334155; color: #ffffff; font-weight: 700; padding: 14px; border-radius: 12px; border: none; cursor: pointer; font-size: 14px; }
+
+    .footer { text-align: center; font-size: 12px; color: #64748b; padding: 16px 0; max-width: 440px; line-height: 1.4; }
   </style>
 </head>
 <body>
 
+  <!-- CARD 1: CẬP NHẬT TIN NHANH -->
   <div class="card">
-    <div class="badge"><div class="dot"></div> Máy Chủ Cloud 24/7 Sẵn Sàng</div>
-    <h1>Báo Chính Phủ - Điều Khiển</h1>
-    <p class="sub">Yêu cầu cập nhật tin tức hoặc sản xuất video Remotion tức thì không cần đợi 30 phút.</p>
-
+    <div class="badge"><div class="dot"></div> Cloud Microsoft 24/7</div>
+    <h1>Báo Chính Phủ - Cập Nhật Nhanh</h1>
+    <p class="sub">Yêu cầu quét tin tức tức thì không cần đợi chu kỳ 30 phút.</p>
     <button id="btnNews" class="btn btn-news" onclick="triggerNews()">
       <span>⚡️</span> CẬP NHẬT BẢN TIN MỚI NGAY
     </button>
-
     <div id="statusNews" class="alert"></div>
   </div>
 
+  <!-- CARD 2: SẢN XUẤT VIDEO THEO YÊU CẦU -->
   <div class="card">
-    <h1 style="font-size: 19px;">🎬 Tạo Video Tin Tức Bất Kỳ</h1>
-    <p class="sub" style="margin-bottom: 16px;">Chọn số thứ tự bài báo muốn sản xuất video thời sự chuẩn Remotion 9:16:</p>
+    <h1>🎬 Sản Xuất Video Thời Sự</h1>
+    <p class="sub">Hỗ trợ dán link bài viết bất kỳ hoặc chọn bài từ bản tin vừa cập nhật.</p>
 
-    <div class="select-group">
+    <div class="form-group">
+      <label for="customUrl">🔗 Dán link bài viết muốn làm video:</label>
+      <input type="url" id="customUrl" placeholder="Ví dụ: https://baochinhphu.vn/... hoặc VnExpress, Dân Trí">
+    </div>
+
+    <div class="divider">Hoặc chọn theo thứ tự</div>
+
+    <div class="form-group">
       <label for="newsIndex">Chọn bài báo trong bản tin mới nhất:</label>
       <select id="newsIndex">
         <option value="1">Bài số 1 (Tin mới nhất)</option>
@@ -57,15 +84,30 @@
       </select>
     </div>
 
-    <button id="btnVideo" class="btn btn-video" onclick="triggerVideo()">
+    <button id="btnVideoPrompt" class="btn btn-video" onclick="promptVideoConfirmation()">
       <span>🎥</span> SẢN XUẤT VIDEO NGAY
     </button>
 
     <div id="statusVideo" class="alert"></div>
   </div>
 
+  <!-- MODAL XÁC NHẬN TẠO VIDEO -->
+  <div id="confirmModal" class="modal-overlay">
+    <div class="modal">
+      <h2>🎬 Xác Nhận Sản Xuất Video</h2>
+      <p>Máy chủ Cloud sẽ tự động bóc tách nội dung, tạo giọng đọc AI, đồng bộ phụ đề chạy từng từ và render video Full HD 9:16 cho:</p>
+      
+      <div id="modalTargetText" class="target-preview">...</div>
+
+      <div class="modal-btns">
+        <button class="btn-cancel" onclick="closeModal()">❌ HỦY</button>
+        <button class="btn-confirm" onclick="executeVideoGeneration()">✅ XÁC NHẬN TẠO</button>
+      </div>
+    </div>
+  </div>
+
   <div class="footer">
-    💡 Mẹo: Nhấn nút Chia sẻ trên trình duyệt điện thoại và chọn <b>"Thêm vào Màn hình chính" (Add to Home Screen)</b> để mở nhanh như ứng dụng bất cứ lúc nào!
+    💡 <b>Mẹo dùng tiện lợi:</b> Trên điện thoại, nhấn <b>Chia sẻ</b> ➔ Chọn <b>"Thêm vào Màn hình chính"</b> để mở ứng dụng điều khiển này chỉ với 1 chạm bất kỳ lúc nào!
   </div>
 
   <script>
@@ -74,13 +116,16 @@
     const G_TOKEN = p1 + p2;
     const REPO = 'maihieuhieu98-ux/daily-news-bot';
 
+    let pendingTarget = { type: '', value: '' };
+
+    // 1. Quét tin tức nhanh
     async function triggerNews() {
       const btn = document.getElementById('btnNews');
       const st = document.getElementById('statusNews');
       btn.disabled = true;
       btn.style.opacity = '0.6';
       st.className = 'alert loading';
-      st.innerHTML = '⏳ Đang gửi lệnh đến máy chủ Cloud...';
+      st.innerHTML = '⏳ Đang gửi yêu cầu đến máy chủ Cloud...';
 
       try {
         const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/356287443/dispatches`, {
@@ -98,7 +143,7 @@
           st.innerHTML = '✅ <b>ĐÃ PHÁT LỆNH THÀNH CÔNG!</b><br>Máy chủ đang quét tin tức từ Báo Chính Phủ và gửi bản tin mới nhất về Telegram của bạn sau <b>5 giây</b>!';
         } else {
           st.className = 'alert error';
-          st.innerHTML = '❌ Lỗi: ' + res.status + ' ' + (await res.text());
+          st.innerHTML = '❌ Lỗi: ' + res.status;
         }
       } catch (err) {
         st.className = 'alert error';
@@ -111,18 +156,82 @@
       }
     }
 
-    async function triggerVideo() {
-      const btn = document.getElementById('btnVideo');
-      const st = document.getElementById('statusVideo');
-      const idx = document.getElementById('newsIndex').value;
+    // 2. Mở hộp thoại xác nhận tạo video
+    function promptVideoConfirmation() {
+      const customUrl = document.getElementById('customUrl').value.trim();
+      const newsIndex = document.getElementById('newsIndex').value;
+      const modal = document.getElementById('confirmModal');
+      const preview = document.getElementById('modalTargetText');
 
+      if (customUrl) {
+        if (!customUrl.startsWith('http://') && !customUrl.startsWith('https://')) {
+          alert('Vui lòng nhập đường link bài viết hợp lệ (bắt đầu bằng https://)');
+          return;
+        }
+        pendingTarget = { type: 'custom_url', value: customUrl };
+        preview.innerHTML = `📌 <b>Link bài viết:</b><br>${customUrl}`;
+      } else {
+        pendingTarget = { type: 'index', value: newsIndex };
+        preview.innerHTML = `📌 <b>Bài báo số ${newsIndex}</b> trong bản tin mới nhất vừa cập nhật`;
+      }
+
+      modal.classList.add('active');
+    }
+
+    function closeModal() {
+      document.getElementById('confirmModal').classList.remove('active');
+    }
+
+    // 3. Thực thi tạo video khi người dùng bấm xác nhận
+    async function executeVideoGeneration() {
+      closeModal();
+      const st = document.getElementById('statusVideo');
+      const btn = document.getElementById('btnVideoPrompt');
       btn.disabled = true;
       btn.style.opacity = '0.6';
       st.className = 'alert loading';
-      st.innerHTML = `⏳ Đang gửi yêu cầu tạo video cho bài báo số ${idx}...`;
+      st.innerHTML = '⏳ Đang khởi động hệ thống sản xuất video Remotion Cloud...';
 
       try {
-        const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/make-video.yml/dispatches`, {
+        if (pendingTarget.type === 'custom_url') {
+          // Lấy SHA của custom_task.json
+          let sha = null;
+          try {
+            const getRes = await fetch(`https://api.github.com/repos/${REPO}/contents/custom_task.json`, {
+              headers: { 'Authorization': 'Bearer ' + G_TOKEN }
+            });
+            if (getRes.ok) {
+              const data = await getRes.json();
+              sha = data.sha;
+            }
+          } catch (e) {}
+
+          // Ghi đè custom_task.json với link bài viết của người dùng
+          const payload = {
+            url: pendingTarget.value,
+            timestamp: Date.now()
+          };
+
+          const putRes = await fetch(`https://api.github.com/repos/${REPO}/contents/custom_task.json`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': 'Bearer ' + G_TOKEN,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: 'Set custom article url for video generation',
+              content: btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2)))),
+              sha: sha || undefined
+            })
+          });
+
+          if (!putRes.ok) {
+            throw new Error('Không thể nạp link bài viết lên máy chủ: ' + putRes.status);
+          }
+        }
+
+        // Kích hoạt workflow render
+        const dispatchRes = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/make-video.yml/dispatches`, {
           method: 'POST',
           headers: {
             'Authorization': 'Bearer ' + G_TOKEN,
@@ -131,20 +240,21 @@
           },
           body: JSON.stringify({
             ref: 'main',
-            inputs: { news_index: idx }
+            inputs: { news_index: (pendingTarget.type === 'index' ? pendingTarget.value : '1') }
           })
         });
 
-        if (res.status === 204 || res.ok) {
+        if (dispatchRes.status === 204 || dispatchRes.ok) {
           st.className = 'alert success';
-          st.innerHTML = `🎬 <b>ĐÃ BẮT ĐẦU SẢN XUẤT VIDEO (Bài #${idx})!</b><br>Cloud đang tải ảnh, tạo giọng đọc AI, đồng bộ phụ đề và render Full HD. File MP4 hoàn chỉnh sẽ gửi về Telegram của bạn sau <b>2 phút</b>!`;
+          st.innerHTML = `🎬 <b>ĐÃ PHÁT LỆNH THÀNH CÔNG!</b><br>Cloud đang tải ảnh, tạo giọng đọc AI, đồng bộ phụ đề và render video Full HD.<br>File MP4 sẽ tự động gửi thẳng về <b>Telegram</b> của bạn sau <b>2 phút</b>!`;
+          document.getElementById('customUrl').value = '';
         } else {
           st.className = 'alert error';
-          st.innerHTML = '❌ Lỗi: ' + res.status + ' ' + (await res.text());
+          st.innerHTML = '❌ Lỗi khởi động render: ' + dispatchRes.status;
         }
       } catch (err) {
         st.className = 'alert error';
-        st.innerHTML = '❌ Lỗi kết nối: ' + err.message;
+        st.innerHTML = '❌ Lỗi: ' + err.message;
       } finally {
         setTimeout(() => {
           btn.disabled = false;
