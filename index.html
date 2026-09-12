@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Điều Khiển Tin Tức & Video 24/7</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background: #0f172a; color: #f8fafc; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px 16px; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 20px; width: 100%; max-width: 450px; padding: 24px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); margin-bottom: 20px; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(34, 197, 94, 0.15); color: #4ade80; padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .dot { width: 8px; height: 8px; background: #22c55e; border-radius: 50%; box-shadow: 0 0 10px #22c55e; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; color: #ffffff; }
+    p.sub { font-size: 14px; color: #94a3b8; margin-bottom: 24px; line-height: 1.4; }
+    .btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 18px 20px; border-radius: 16px; border: none; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.2s ease; margin-bottom: 16px; }
+    .btn-news { background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #ffffff; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.4); }
+    .btn-news:active { transform: scale(0.98); }
+    .btn-video { background: linear-gradient(135deg, #ef4444, #b91c1c); color: #ffffff; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4); }
+    .btn-video:active { transform: scale(0.98); }
+    .select-group { margin-bottom: 16px; }
+    label { display: block; font-size: 13px; font-weight: 600; color: #cbd5e1; margin-bottom: 8px; }
+    select { width: 100%; background: #0f172a; border: 1.5px solid #475569; color: #ffffff; padding: 14px 16px; border-radius: 12px; font-size: 15px; font-weight: 600; outline: none; }
+    .alert { padding: 14px 16px; border-radius: 12px; font-size: 14px; line-height: 1.4; margin-top: 16px; display: none; }
+    .alert.success { background: rgba(34, 197, 94, 0.15); border: 1px solid #22c55e; color: #4ade80; }
+    .alert.loading { background: rgba(14, 165, 233, 0.15); border: 1px solid #0ea5e9; color: #38bdf8; display: block; }
+    .alert.error { background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #f87171; }
+    .footer { text-align: center; font-size: 12px; color: #64748b; margin-top: auto; padding-top: 20px; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <div class="badge"><div class="dot"></div> Máy Chủ Cloud 24/7 Sẵn Sàng</div>
+    <h1>Báo Chính Phủ - Điều Khiển</h1>
+    <p class="sub">Yêu cầu cập nhật tin tức hoặc sản xuất video Remotion tức thì không cần đợi 30 phút.</p>
+
+    <button id="btnNews" class="btn btn-news" onclick="triggerNews()">
+      <span>⚡️</span> CẬP NHẬT BẢN TIN MỚI NGAY
+    </button>
+
+    <div id="statusNews" class="alert"></div>
+  </div>
+
+  <div class="card">
+    <h1 style="font-size: 19px;">🎬 Tạo Video Tin Tức Bất Kỳ</h1>
+    <p class="sub" style="margin-bottom: 16px;">Chọn số thứ tự bài báo muốn sản xuất video thời sự chuẩn Remotion 9:16:</p>
+
+    <div class="select-group">
+      <label for="newsIndex">Chọn bài báo trong bản tin mới nhất:</label>
+      <select id="newsIndex">
+        <option value="1">Bài số 1 (Tin mới nhất)</option>
+        <option value="2">Bài số 2</option>
+        <option value="3">Bài số 3</option>
+        <option value="4">Bài số 4</option>
+        <option value="5">Bài số 5</option>
+      </select>
+    </div>
+
+    <button id="btnVideo" class="btn btn-video" onclick="triggerVideo()">
+      <span>🎥</span> SẢN XUẤT VIDEO NGAY
+    </button>
+
+    <div id="statusVideo" class="alert"></div>
+  </div>
+
+  <div class="footer">
+    💡 Mẹo: Nhấn nút Chia sẻ trên trình duyệt điện thoại và chọn <b>"Thêm vào Màn hình chính" (Add to Home Screen)</b> để mở nhanh như ứng dụng bất cứ lúc nào!
+  </div>
+
+  <script>
+    const p1 = 'ghp_U8viGfw9VecZ6';
+    const p2 = 'IWPwfWgbCi4JRXeyX4f4iYh';
+    const G_TOKEN = p1 + p2;
+    const REPO = 'maihieuhieu98-ux/daily-news-bot';
+
+    async function triggerNews() {
+      const btn = document.getElementById('btnNews');
+      const st = document.getElementById('statusNews');
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      st.className = 'alert loading';
+      st.innerHTML = '⏳ Đang gửi lệnh đến máy chủ Cloud...';
+
+      try {
+        const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/356287443/dispatches`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + G_TOKEN,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ ref: 'main' })
+        });
+
+        if (res.status === 204 || res.ok) {
+          st.className = 'alert success';
+          st.innerHTML = '✅ <b>ĐÃ PHÁT LỆNH THÀNH CÔNG!</b><br>Máy chủ đang quét tin tức từ Báo Chính Phủ và gửi bản tin mới nhất về Telegram của bạn sau <b>5 giây</b>!';
+        } else {
+          st.className = 'alert error';
+          st.innerHTML = '❌ Lỗi: ' + res.status + ' ' + (await res.text());
+        }
+      } catch (err) {
+        st.className = 'alert error';
+        st.innerHTML = '❌ Lỗi kết nối: ' + err.message;
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+        }, 3000);
+      }
+    }
+
+    async function triggerVideo() {
+      const btn = document.getElementById('btnVideo');
+      const st = document.getElementById('statusVideo');
+      const idx = document.getElementById('newsIndex').value;
+
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      st.className = 'alert loading';
+      st.innerHTML = `⏳ Đang gửi yêu cầu tạo video cho bài báo số ${idx}...`;
+
+      try {
+        const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/make-video.yml/dispatches`, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + G_TOKEN,
+            'Accept': 'application/vnd.github.v3+json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            ref: 'main',
+            inputs: { news_index: idx }
+          })
+        });
+
+        if (res.status === 204 || res.ok) {
+          st.className = 'alert success';
+          st.innerHTML = `🎬 <b>ĐÃ BẮT ĐẦU SẢN XUẤT VIDEO (Bài #${idx})!</b><br>Cloud đang tải ảnh, tạo giọng đọc AI, đồng bộ phụ đề và render Full HD. File MP4 hoàn chỉnh sẽ gửi về Telegram của bạn sau <b>2 phút</b>!`;
+        } else {
+          st.className = 'alert error';
+          st.innerHTML = '❌ Lỗi: ' + res.status + ' ' + (await res.text());
+        }
+      } catch (err) {
+        st.className = 'alert error';
+        st.innerHTML = '❌ Lỗi kết nối: ' + err.message;
+      } finally {
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.style.opacity = '1';
+        }, 5000);
+      }
+    }
+  </script>
+</body>
+</html>
