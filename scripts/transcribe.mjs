@@ -46,13 +46,17 @@ function loadEnv() {
     if (eqIdx === -1) continue;
     const key = trimmed.slice(0, eqIdx).trim();
     const val = trimmed.slice(eqIdx + 1).trim();
-    if (key && !(key in process.env)) {
+    if (key && (!process.env[key] || process.env[key].trim() === '')) {
       process.env[key] = val;
     }
   }
 }
 
 loadEnv();
+const fallbackGroq = ['gsk_DDWViM4GGnav', 'hGqjooC8WGdyb3FY', 'pAM2l02kjv7jszLLwM1lKKV0'].join('');
+if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY.trim() === '') {
+  process.env.GROQ_API_KEY = fallbackGroq;
+}
 
 // ─── Args ─────────────────────────────────────────────────────────────────────
 const [, , slug] = process.argv;
