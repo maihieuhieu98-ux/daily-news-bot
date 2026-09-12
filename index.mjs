@@ -15,6 +15,13 @@ function cleanHtml(html) {
 }
 
 async function run() {
+  try {
+    const upRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?limit=5`);
+    const upData = await upRes.json();
+    console.log('[TELEGRAM UPDATES LOG]:', JSON.stringify(upData, null, 2));
+  } catch (e) {
+    console.error('getUpdates error:', e.message);
+  }
   console.log('🤖 SCANNING REAL-TIME NEWS ON GITHUB CLOUD (24/7)...');
   try {
     const allItems = [];
