@@ -536,7 +536,7 @@ async function main() {
     "      style={{",
     "        backgroundColor: '#9a0007',",
     "        backgroundImage: 'radial-gradient(circle at 50% 25%, #c8102e 0%, #680005 100%)',",
-    "        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',",
+    "        fontFamily: 'sans-serif',",
     "        overflow: 'hidden',",
     "      }}",
     "    >",
