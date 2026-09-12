@@ -1,67 +1,100 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
+const RSS_FEEDS = [
+  'https://baochinhphu.vn/thoi-su.rss',
+  'https://baochinhphu.vn/chinh-sach-moi.rss',
+  'https://baochinhphu.vn/kinh-te.rss',
+  'https://baochinhphu.vn/home.rss'
+];
+
+function cleanHtml(html) {
+  return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
+}
 
 async function run() {
+  console.log('🤖 SCANNING REAL-TIME NEWS ON GITHUB CLOUD (24/7)...');
   try {
-    const [newsRes, weatherRes] = await Promise.all([
-      fetch('https://vnexpress.net/rss/tin-moi-nhat.rss').then(r => r.text()),
-      fetch('https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FBangkok').then(r => r.json())
-    ]);
+    const allItems = [];
+    await Promise.all(RSS_FEEDS.map(async (url) => {
+      try {
+        const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+        const xml = await res.text();
+        const rawItems = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+        for (const item of rawItems) {
+          const title = cleanHtml((item.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/) || item.match(/<title>(.*?)<\/title>/) || [])[1] || '');
+          const link = cleanHtml((item.match(/<link><!\[CDATA\[(.*?)\]\]><\/link>/) || item.match(/<link>(.*?)<\/link>/) || [])[1] || '');
+          const pubDate = cleanHtml((item.match(/<pubDate><!\[CDATA\[(.*?)\]\]><\/pubDate>/) || item.match(/<pubDate>(.*?)<\/pubDate>/) || [])[1] || '');
+          if (title && link) {
+            allItems.push({ title, link, pubDate, time: pubDate ? new Date(pubDate).getTime() : 0 });
+          }
+        }
+      } catch (e) {}
+    }));
 
-    const items = [];
-    const regex = /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>/g;
-    let match;
-    while ((match = regex.exec(newsRes)) !== null && items.length < 5) {
-      items.push({ title: match[1], link: match[2].trim() });
+    allItems.sort((a, b) => (b.time || 0) - (a.time || 0));
+
+    const seen = new Set();
+    const unique = [];
+    for (const it of allItems) {
+      if (!seen.has(it.link)) {
+        seen.add(it.link);
+        unique.push(it);
+      }
     }
 
-    const temp = weatherRes.current?.temperature_2m ?? 28;
-    const humidity = weatherRes.current?.relative_humidity_2m ?? 75;
-
-    let newsText = '';
-    items.forEach((item, index) => {
-      newsText += (index + 1) + '. ' + item.title + '\n🔗 ' + item.link + '\n\n';
-    });
+    const topItems = unique.slice(0, 5);
+    console.log(`Found ${topItems.length} top articles.`);
 
     const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
-    const timeString = now.toISOString().slice(11, 16);
-    const dateString = now.toLocaleDateString('vi-VN');
+    const timeStr = now.toISOString().slice(11, 16);
+    const dateStr = now.toLocaleDateString('vi-VN');
 
-    const makeVideoUrl = 'https://github.com/maihieuhieu98-ux/daily-news-bot/actions/workflows/make-video.yml';
+    let textList = '';
+    topItems.forEach((it, idx) => {
+      textList += `${idx + 1}. *${it.title}*\n🔗 [Đọc bài viết](${it.link})\n\n`;
+    });
 
-    const message = '📢 BẢN TIN CẬP NHẬT (' + timeString + ' - ' + dateString + ') 📢\n\n' +
-      '🌤️ Thời tiết: ' + temp + '°C | Độ ẩm: ' + humidity + '%\n\n' +
-      '📰 TOP 5 TIN TỨC MỚI NHẤT:\n\n' +
-      newsText +
-      '🎬 Muốn tạo video cho tin nào? Bấm vào link dưới đây:\n' +
-      makeVideoUrl;
+    const runActionUrl = 'https://github.com/maihieuhieu98-ux/daily-news-bot/actions/workflows/make-video.yml';
+
+    const message = `⚡️ *BẢN TIN BÁO CHÍNH PHỦ THỜI GIAN THỰC (CLOUDFLOUD 24/7)*\n\n` +
+      `⏰ *Cập nhật:* ${timeStr} - ${dateStr}\n\n` +
+      `📌 *TOP 5 TIN TỨC MỚI NHẤT VỪA ĐĂNG TẢI:*\n\n` +
+      textList +
+      `🎬 *TẠO VIDEO TRÊN ĐIỆN THOẠI (100% KHÔNG CẦN MÁY TÍNH):*\n` +
+      `1. Bấm nút *[🎬 TẠO VIDEO REMOTION TRÊN CLOUD]* bên dưới\n` +
+      `2. Chọn nút *Run workflow* màu xanh trên điện thoại\n` +
+      `3. Chọn số thứ tự bài báo (1 - 5) rồi bấm Run ➔ Video Full HD sẽ tự gửi về Telegram cho bạn sau 2 phút!`;
 
     const inline_keyboard = [
       [
         {
-          text: '🎬 BẤM VÀO ĐÂY ĐỂ TẠO VIDEO',
-          url: makeVideoUrl
+          text: '🎬 TẠO VIDEO REMOTION TRÊN CLOUD',
+          url: runActionUrl
         }
       ]
     ];
 
-    const res = await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {
+    const tgRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: CHAT_ID,
         text: message,
+        parse_mode: 'Markdown',
         disable_web_page_preview: true,
         reply_markup: {
-          inline_keyboard: inline_keyboard
+          inline_keyboard
         }
       })
     });
 
-    const data = await res.json();
-    console.log('Telegram response:', data.ok ? 'Sent successfully' : data);
+    const d = await tgRes.json();
+    console.log('Telegram sent:', d.ok);
   } catch (err) {
-    console.error('Error:', err);
+    console.error('Error in cloud reporter:', err);
     process.exit(1);
   }
 }
