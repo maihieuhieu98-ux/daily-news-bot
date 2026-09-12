@@ -1,3 +1,17 @@
+
+function ensureEnvFile() {
+  const geminiKey = process.env.GEMINI_API_KEY || '';
+  const groqKey = process.env.GROQ_API_KEY || '';
+  const envContent = [
+    'GEMINI_API_KEY=' + geminiKey,
+    'GEMINI_TTS_VOICE=' + (process.env.GEMINI_TTS_VOICE || 'Achird'),
+    'GROQ_API_KEY=' + groqKey,
+    'GROQ_STT_MODEL=' + (process.env.GROQ_STT_MODEL || 'whisper-large-v3-turbo'),
+    'SHOW_SUBTITLES=true'
+  ].join('\n') + '\n';
+  fs.writeFileSync('.env', envContent, 'utf8');
+  console.log('[CLOUD] .env file created successfully from secrets!');
+}
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
@@ -139,6 +153,7 @@ async function resolveArticle() {
 }
 
 async function main() {
+  ensureEnvFile();
   await resolveArticle();
 
   console.log('🚀 CLOUD RENDER STARTED...');
