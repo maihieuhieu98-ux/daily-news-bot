@@ -1,0 +1,38 @@
+name: Make News Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      news_index:
+        description: 'Chọn số thứ tự bài báo muốn làm video (1, 2, 3, 4, hoặc 5)'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+
+jobs:
+  create-video:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Generate and Send Video to Telegram
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          NEWS_INDEX: ${{ github.event.inputs.news_index }}
+        run: node make-video.mjs
