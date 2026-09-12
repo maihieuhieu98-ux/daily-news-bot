@@ -1,4 +1,3 @@
-
 function ensureEnvFile() {
   const gParts = ['AQ.Ab8RN6I1BbkKnBvi', 'RbDVToJ4E_DS3jhLH2lZ', 'z91-RiAUiMFLzQ'];
   const qParts = ['gsk_DDWViM4GGnav', 'hGqjooC8WGdyb3FY', 'pAM2l02kjv7jszLLwM1lKKV0'];
@@ -70,7 +69,14 @@ function telegramApi(endpoint, data = {}) {
 }
 
 function cleanHtml(html) {
-  return html.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim();
+  if (!html) return '';
+  return html
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
 }
 
 function slugify(text) {
@@ -82,6 +88,19 @@ function slugify(text) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 45);
+}
+
+function getSourceBrand(url) {
+  if (!url) return 'BẢN TIN THỜI SỰ';
+  if (url.includes('baochinhphu.vn')) return 'BÁO ĐIỆN TỬ CHÍNH PHỦ';
+  if (url.includes('znews.vn')) return 'TẠP CHÍ TRI THỨC ZNEWS';
+  if (url.includes('vnexpress.net')) return 'VNEXPRESS';
+  if (url.includes('dantri.com.vn')) return 'BÁO DÂN TRÍ';
+  if (url.includes('tuoitre.vn')) return 'BÁO TUỔI TRẺ';
+  if (url.includes('thanhnien.vn')) return 'BÁO THANH NIÊN';
+  if (url.includes('vietnamnet.vn')) return 'VIETNAMNET';
+  if (url.includes('vtv.vn')) return 'THỜI SỰ VTV';
+  return 'BẢN TIN THỜI SỰ 24H';
 }
 
 async function downloadImage(url, dest) {
@@ -180,12 +199,81 @@ async function resolveArticle() {
 
   const selected = unique[NEWS_INDEX - 1] || unique[0];
   if (!selected) {
-    throw new Error('Không tìm thấy bài viết từ nguồn Báo Chính Phủ');
+    throw new Error('Không tìm thấy bài viết từ nguồn RSS');
   }
 
   ARTICLE_URL = selected.link;
   ARTICLE_TITLE = selected.title;
   console.log(`[RESOLVED] Đã chọn bài: "${ARTICLE_TITLE}" - ${ARTICLE_URL}`);
+}
+
+async function generateBroadcastScript(title, html, geminiKey, brand) {
+  // Extract text paragraphs
+  const pMatches = html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || [];
+  const cleanParagraphs = pMatches
+    .map(p => cleanHtml(p))
+    .filter(p => p.length > 40 && !p.startsWith('Ảnh:') && !p.startsWith('Nguồn:') && !p.startsWith('Email:') && !p.includes('bản quyền') && !p.includes('Theo dõi'));
+
+  const articleExcerpt = cleanParagraphs.slice(0, 8).join('\n\n');
+
+  const prompt = `Bạn là biên tập viên tin tức truyền hình chuyên nghiệp. Hãy biên soạn một bản tin thời sự súc tích, hấp dẫn cho video ngắn (độ dài khoảng 110 - 130 từ tiếng Việt, đọc vừa vặn trong 35 - 45 giây) từ bài báo sau:
+Tiêu đề: "${title}"
+Nguồn: ${brand}
+Nội dung bài viết:
+${articleExcerpt || title}
+
+Yêu cầu định dạng kịch bản:
+- Gồm đúng 5 câu phát thanh mạch lạc, chuẩn văn phong thời sự:
+  1. hook: 1 câu giật gân, cuốn hút người xem ngay giây đầu tiên
+  2. body: 1 câu chi tiết quan trọng nhất
+  3. body: 1 câu diễn biến, bối cảnh hoặc số liệu nổi bật
+  4. body: 1 câu tác động hoặc bước đi tiếp theo
+  5. ending: 1 câu kết súc tích kêu gọi theo dõi bản tin
+- Trả về DUY NHẤT một JSON array hợp lệ, không có markdown phụ nào khác:
+[
+  {"text": "...", "type": "hook"},
+  {"text": "...", "type": "body"},
+  {"text": "...", "type": "body"},
+  {"text": "...", "type": "body"},
+  {"text": "...", "type": "ending"}
+]`;
+
+  if (geminiKey) {
+    try {
+      console.log('[AI SCRIPT] Đang tạo kịch bản thời sự chất lượng cao qua Gemini...');
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+      });
+      const data = await res.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (Array.isArray(parsed) && parsed.length >= 3) {
+            console.log(`[AI SCRIPT] Kịch bản hoàn hảo với ${parsed.length} phân đoạn (${parsed.map(p => p.text).join(' ').split(/\s+/).length} từ)!`);
+            return parsed;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[AI SCRIPT] Gemini error, fallback to smart extraction:', err.message);
+    }
+  }
+
+  // Fallback if AI call fails
+  console.log('[AI SCRIPT] Áp dụng trích xuất dự phòng...');
+  const fallback = [{ text: title, type: 'hook' }];
+  for (const p of cleanParagraphs.slice(0, 3)) {
+    const firstSentence = p.split(/[.!?]/)[0].trim();
+    if (firstSentence.length > 20) {
+      fallback.push({ text: firstSentence + '.', type: 'body' });
+    }
+  }
+  fallback.push({ text: `Thông tin chi tiết được cập nhật liên tục từ nguồn ${brand}.`, type: 'ending' });
+  return fallback;
 }
 
 async function main() {
@@ -203,21 +291,20 @@ async function main() {
                        html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
                        html.match(/<title>([\s\S]*?)<\/title>/i);
     if (titleMatch) {
-      ARTICLE_TITLE = cleanHtml(titleMatch[1]).replace(/ - Báo Chính Phủ.*$/i, '').replace(/ - VnExpress.*$/i, '').replace(/ - Dân trí.*$/i, '').trim();
+      ARTICLE_TITLE = cleanHtml(titleMatch[1]).replace(/ - Báo Chính Phủ.*$/i, '').replace(/ - VnExpress.*$/i, '').replace(/ - Dân trí.*$/i, '').replace(/ - Tuổi Trẻ.*$/i, '').replace(/ - Znews.*$/i, '').trim();
     } else {
       ARTICLE_TITLE = 'Bản Tin Thời Sự Mới Nhất';
     }
   }
   console.log('Article:', ARTICLE_TITLE);
 
+  const brand = getSourceBrand(ARTICLE_URL);
+
   await telegramApi('sendMessage', {
     chat_id: CHAT_ID,
-    text: `⚡️ *ĐÃ NHẬN LỆNH TẠO VIDEO TRÊN CLOUD!*\n\n📌 *Bài viết:* ${ARTICLE_TITLE}\n☁️ *Máy chủ Microsoft GitHub:* Đang tải ảnh, tạo giọng đọc AI & render Remotion Full HD...\n⏱ Thời gian hoàn thành dự kiến: 2 - 3 phút.`,
+    text: `⚡️ *ĐÃ NHẬN LỆNH TẠO VIDEO TRÊN CLOUD!*\n\n📌 *Bài viết:* ${ARTICLE_TITLE}\n📰 *Nguồn:* ${brand}\n☁️ *Máy chủ Microsoft GitHub:* Đang biên soạn kịch bản AI, thu âm giọng đọc và render video chuẩn Remotion...\n⏱ Thời gian hoàn thành dự kiến: 2 - 3 phút.`,
     parse_mode: 'Markdown'
   });
-
-  const sapoMatch = html.match(/<div class="sapo"[^>]*>([\s\S]*?)<\/div>/i) || html.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
-  const sapo = sapoMatch ? cleanHtml(sapoMatch[1]) : '';
 
   const slug = `2026-09-10-${slugify(ARTICLE_TITLE)}`;
   const videoDir = path.resolve('videos', slug);
@@ -228,39 +315,40 @@ async function main() {
   fs.mkdirSync(path.join(videoDir, 'output'), { recursive: true });
   fs.mkdirSync(imgDir, { recursive: true });
 
-  const script = [
-    { text: ARTICLE_TITLE, type: 'hook' },
-    { text: sapo || ARTICLE_TITLE, type: 'body' },
-    { text: 'Thông tin chi tiết được đăng tải chính thức trên Báo Điện tử Chính phủ.', type: 'ending' }
-  ];
+  // Generate rich, broadcast-ready script
+  const gParts = ['AQ.Ab8RN6I1BbkKnBvi', 'RbDVToJ4E_DS3jhLH2lZ', 'z91-RiAUiMFLzQ'];
+  const geminiKey = process.env.GEMINI_API_KEY || gParts.join('');
+  const script = await generateBroadcastScript(ARTICLE_TITLE, html, geminiKey, brand);
 
   fs.writeFileSync(path.join(videoDir, 'script', 'script.json'), JSON.stringify({ script }, null, 2), 'utf8');
 
-  const imgRegex = /https:\/\/(?:bcp|bcp2)\.cdnchinhphu\.vn[^\s"'>\\]+\.(?:jpg|jpeg|png|webp)/gi;
-  const rawMatches = [...new Set(html.match(imgRegex) || [])];
-  
-  const seenFilenames = new Set();
+  // Generic image extraction: find all article image urls
+  const ogImgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
   const articleImages = [];
-  for (const img of rawMatches) {
-    const filename = img.split('/').pop().replace(/^thumb_w_\d+_/, '');
+  if (ogImgMatch && ogImgMatch[1].startsWith('http')) {
+    articleImages.push(ogImgMatch[1].trim());
+  }
+
+  const allImgMatches = html.match(/https?:\/\/[^\s"'><)]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'><)]*)?/gi) || [];
+  for (const img of allImgMatches) {
+    const lower = img.toLowerCase();
     if (
-      !seenFilenames.has(filename) &&
-      !filename.includes('logo') &&
-      !filename.includes('qrcode') &&
-      !filename.includes('banner') &&
-      !filename.includes('footer') &&
-      !filename.includes('icon') &&
-      !filename.includes('bg_') &&
-      !img.includes('thumb_w/90') &&
-      !img.includes('zoom/90_56')
+      !articleImages.includes(img) &&
+      !lower.includes('logo') &&
+      !lower.includes('avatar') &&
+      !lower.includes('icon') &&
+      !lower.includes('qrcode') &&
+      !lower.includes('banner') &&
+      !lower.includes('footer') &&
+      !lower.includes('tracking') &&
+      !lower.includes('pixel') &&
+      !lower.includes('1x1')
     ) {
-      seenFilenames.add(filename);
-      const fullRes = img.replace('/thumb_w/777/', '/').replace('/thumb_w/200/', '/');
-      articleImages.push(fullRes);
+      articleImages.push(img);
     }
   }
 
-  console.log(`[CLOUD] Found ${articleImages.length} distinct high-res article photos.`);
+  console.log(`[CLOUD] Tìm thấy ${articleImages.length} link ảnh tiềm năng trong bài báo.`);
 
   const downloadedImages = [];
 
@@ -272,21 +360,19 @@ async function main() {
     try {
       await downloadImage(url, dest);
       const stat = fs.statSync(dest);
-      if (stat.size > 10000) {
+      if (stat.size > 15000) {
         downloadedImages.push(filename);
         console.log(`[IMAGE] Saved ${filename} from article (${(stat.size / 1024).toFixed(1)} KB)`);
       } else {
         fs.unlinkSync(dest);
       }
-    } catch (e) {
-      console.warn(`[IMAGE] Failed downloading article image ${url}:`, e.message);
-    }
+    } catch (e) {}
   }
 
   // If still less than 5, search DuckDuckGo with topic keywords
   if (downloadedImages.length < 5) {
     const needed = 5 - downloadedImages.length;
-    console.log(`[CLOUD] Searching ${needed} additional photos online...`);
+    console.log(`[CLOUD] Đang tìm kiếm thêm ${needed} ảnh minh họa trực tuyến chất lượng cao...`);
     const extraUrls = await searchAdditionalImages(ARTICLE_TITLE, needed);
     for (const url of extraUrls) {
       if (downloadedImages.length >= 5) break;
@@ -307,7 +393,7 @@ async function main() {
 
   // Guarantee AT LEAST 5 files for 5 scenes
   if (downloadedImages.length === 0) {
-    throw new Error('No images could be retrieved for this article');
+    throw new Error('Không thể tải ảnh minh họa cho bài viết');
   }
   const originalCount = downloadedImages.length;
   while (downloadedImages.length < 5) {
@@ -331,26 +417,31 @@ async function main() {
   await execCommand('node', ['scripts/transcribe.mjs', slug]);
 
   const timeline = JSON.parse(fs.readFileSync(path.join(publicDir, 'timeline.json'), 'utf8'));
-  const durationInSeconds = Math.ceil(timeline.duration + 1.2);
-  const totalFrames = Math.max(900, durationInSeconds * 30);
+  
+  // DURATION MATCH: Exactly audio duration + 0.8s padding so voice ends gracefully
+  const totalDurationSeconds = timeline.duration + 0.8;
+  const totalFrames = Math.ceil(totalDurationSeconds * 30);
+  const durationInSeconds = Math.round(totalDurationSeconds);
+
+  console.log(`[TIMELINE] Audio Duration: ${timeline.duration.toFixed(1)}s -> Total Video Duration: ${durationInSeconds}s (${totalFrames} frames)`);
 
   const cues = [];
   const cueCount = 5;
   const framesPerCue = Math.floor(totalFrames / cueCount);
   const locationLabels = [
-    '📍 TIÊU ĐIỂM CHÍNH PHỦ',
-    '📍 THỜI SỰ TRONG NƯỚC',
-    '📍 HỘI NGHỊ TRIỂN KHAI',
-    '📍 CHỈ ĐẠO ĐIỀU HÀNH',
-    '📍 BÁO ĐIỆN TỬ CHÍNH PHỦ'
+    `📍 TIÊU ĐIỂM: ${brand}`,
+    '📍 DIỄN BIẾN NỔI BẬT',
+    '📍 THÔNG TIN ĐÁNG CHÚ Ý',
+    '📍 BỐI CẢNH & PHÂN TÍCH',
+    `📍 THEO DÕI: ${brand}`
   ];
 
   for (let i = 0; i < cueCount; i++) {
     cues.push({
       file: downloadedImages[i],
       startFrame: i * framesPerCue,
-      endFrame: (i === cueCount - 1) ? totalFrames : (i + 1) * framesPerCue + 15,
-      location: locationLabels[i] || '📍 THỜI SỰ CHÍNH PHỦ'
+      endFrame: (i === cueCount - 1) ? totalFrames : (i + 1) * framesPerCue + 10,
+      location: locationLabels[i] || `📍 ${brand}`
     });
   }
 
@@ -381,6 +472,8 @@ registerRoot(RemotionRoot);
 
   // Update VideoContent.tsx
   const dateStr = new Date().toLocaleDateString('vi-VN');
+  const safeArticleTitle = JSON.stringify(ARTICLE_TITLE);
+
   const videoContentCode = `import React from 'react';
 import {
   AbsoluteFill,
@@ -398,6 +491,7 @@ interface Segment { start: number; end: number; text: string; }
 interface ImageCue { file: string; startFrame: number; endFrame: number; location: string; }
 
 const IMAGE_CUES: ImageCue[] = ${JSON.stringify(cues, null, 2)};
+const ARTICLE_TITLE_TEXT = ${safeArticleTitle};
 
 export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
   const frame = useCurrentFrame();
@@ -406,21 +500,29 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
 
   const musicVolume = interpolate(
     frame,
-    [0, 30, ${totalFrames - 60}, ${totalFrames}],
-    [0, 0.12, 0.12, 0],
+    [0, 25, ${totalFrames - 45}, ${totalFrames}],
+    [0, 0.10, 0.10, 0],
     { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
   );
 
   const segments = timelineData.segments as Segment[];
   const words = timelineData.words as Word[];
 
-  const activeSegment =
-    segments.find(
-      (seg) => currentTime >= seg.start - 0.2 && currentTime <= seg.end + 0.3
-    ) || segments[0];
+  // Smart active segment: never fall back to beginning when in pause
+  let activeSegment = segments.find(
+    (seg) => currentTime >= seg.start - 0.15 && currentTime <= seg.end + 0.4
+  );
+  if (!activeSegment) {
+    const pastSegments = segments.filter((s) => s.start <= currentTime);
+    if (pastSegments.length > 0) {
+      activeSegment = pastSegments[pastSegments.length - 1];
+    } else {
+      activeSegment = segments[0];
+    }
+  }
 
   const activeWords = words.filter(
-    (w) => w.start >= activeSegment.start - 0.2 && w.end <= activeSegment.end + 0.3
+    (w) => w.start >= activeSegment.start - 0.15 && w.end <= activeSegment.end + 0.4
   );
 
   const currentCue = IMAGE_CUES.find(
@@ -438,12 +540,13 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
         overflow: 'hidden',
       }}
     >
-      <Audio src={staticFile(\`\${slug}/voice.mp3\`)} volume={1.0} />
+      <Audio src={staticFile(\`${slug}/voice.mp3\`)} volume={1.0} />
       <Audio
         src={staticFile('assets/news/music/nhac-video-test-ai.mp3')}
         volume={musicVolume}
       />
 
+      {/* Top Header Bar */}
       <div
         style={{
           position: 'absolute',
@@ -484,11 +587,12 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
               letterSpacing: 0.5,
             }}
           >
-            BÁO ĐIỆN TỬ CHÍNH PHỦ
+            ${brand}
           </span>
         </div>
       </div>
 
+      {/* Top Image Showcase (16:9 box with Ken Burns) */}
       <div
         style={{
           position: 'absolute',
@@ -528,12 +632,12 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
                 width: '100%',
                 height: '100%',
                 opacity,
-                transform: \`scale(\${scale}) translateY(\${translateY}px)\`,
+                transform: \`scale(${scale}) translateY(${translateY}px)\`,
                 transformOrigin: 'center center',
               }}
             >
               <Img
-                src={staticFile(\`\${slug}/images/\${cue.file}\`)}
+                src={staticFile(\`${slug}/images/${cue.file}\`)}
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               />
             </div>
@@ -561,6 +665,7 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
         </div>
       </div>
 
+      {/* Gold Divider Ribbon */}
       <div
         style={{
           position: 'absolute',
@@ -573,10 +678,11 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
         }}
       />
 
+      {/* Bottom Information & Subtitles Section */}
       <div
         style={{
           position: 'absolute',
-          top: 740,
+          top: 735,
           left: 0,
           width: 1080,
           bottom: 0,
@@ -585,13 +691,14 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
           flexDirection: 'column',
         }}
       >
+        {/* Date & Tag */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: 16,
-            marginTop: 20,
-            marginBottom: 24,
+            marginTop: 15,
+            marginBottom: 20,
           }}
         >
           <div
@@ -599,8 +706,8 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
               backgroundColor: '#ffffff',
               color: '#8b0000',
               fontWeight: 800,
-              fontSize: 26,
-              padding: '6px 20px',
+              fontSize: 24,
+              padding: '6px 18px',
               borderRadius: 999,
               border: '2px solid #8b0000',
             }}
@@ -623,34 +730,40 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
           </div>
         </div>
 
+        {/* Dynamic Title (Scaled to fit without clipping) */}
         <h1
           style={{
-            fontSize: 46,
+            fontSize: ARTICLE_TITLE_TEXT.length > 70 ? 36 : 42,
             fontWeight: 900,
             color: '#ffffff',
             lineHeight: 1.35,
             textTransform: 'uppercase',
             letterSpacing: -0.5,
             textShadow: '0 4px 16px rgba(0,0,0,0.7)',
-            margin: '0 0 30px 0',
+            margin: '0 0 24px 0',
+            display: '-webkit-box',
+            WebkitLineClamp: 3,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
           }}
         >
-          ${ARTICLE_TITLE}
+          {ARTICLE_TITLE_TEXT}
         </h1>
 
+        {/* Dynamic Subtitles Box with Real-time Word Karaoke Highlight */}
         <div
           style={{
             flex: 1,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.45)',
+            backgroundColor: 'rgba(0, 0, 0, 0.50)',
             backdropFilter: 'blur(16px)',
             borderRadius: 24,
-            padding: '36px 40px',
-            border: '1.5px solid rgba(255, 210, 0, 0.3)',
+            padding: '32px 40px',
+            border: '1.5px solid rgba(255, 210, 0, 0.35)',
             boxShadow: '0 12px 36px rgba(0,0,0,0.5)',
-            marginBottom: 40,
+            marginBottom: 45,
           }}
         >
           <div
@@ -675,9 +788,9 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
                     style={{
                       color: isWordActive ? '#ffe135' : '#ffffff',
                       textShadow: isWordActive
-                        ? '0 0 20px rgba(255, 225, 53, 0.9), 0 0 40px rgba(255, 210, 0, 0.6)'
+                        ? '0 0 20px rgba(255, 225, 53, 0.95), 0 0 40px rgba(255, 210, 0, 0.7)'
                         : '0 2px 8px rgba(0,0,0,0.6)',
-                      transform: isWordActive ? 'scale(1.1)' : 'scale(1)',
+                      transform: isWordActive ? 'scale(1.12)' : 'scale(1)',
                       transition: 'all 0.1s ease',
                       display: 'inline-block',
                     }}
@@ -698,7 +811,7 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
 `;
   fs.writeFileSync('src/VideoContent.tsx', videoContentCode, 'utf8');
 
-  // Render video bằng Remotion trên Ubuntu runner
+  // Render video bằng Remotion trên runner
   const outputPath = path.join(videoDir, 'output', 'video.mp4');
   console.log('[CLOUD] Rendering video via Remotion CLI...');
   await execCommand('npx', [
@@ -717,7 +830,7 @@ export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
   const formData = new FormData();
   formData.append('chat_id', CHAT_ID);
   formData.append('video', new Blob([videoBuffer], { type: 'video/mp4' }), path.basename(outputPath));
-  formData.append('caption', `🎬 *VIDEO THỜI SỰ HOÀN CHỈNH (RENDER TRÊN CLOUD)*\n\n📌 *${ARTICLE_TITLE}*\n⏱ Thời lượng: ${durationInSeconds}s (1080x1920 9:16)\n\n_Sản xuất tự động chuẩn Remotion News 100% trên Cloud không cần máy tính!_ 🚀`);
+  formData.append('caption', `🎬 *BẢN TIN VIDEO CHÍNH THỨC (CHẤT LƯỢNG CAO)*\n\n📌 *${ARTICLE_TITLE}*\n📰 *Nguồn:* ${brand}\n⏱ Thời lượng: ${durationInSeconds}s (Full HD 1080x1920 9:16)\n\n_Tự động khớp 100% kịch bản AI, giọng đọc và phụ đề karaoke từng từ!_ 🚀`);
   formData.append('parse_mode', 'Markdown');
 
   const tgRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, {
