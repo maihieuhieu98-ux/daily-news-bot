@@ -3,13 +3,11 @@ const CHAT_ID = process.env.CHAT_ID;
 
 async function run() {
   try {
-    // 1. Lấy tin tức VnExpress và Thời tiết
     const [newsRes, weatherRes] = await Promise.all([
       fetch('https://vnexpress.net/rss/tin-moi-nhat.rss').then(r => r.text()),
       fetch('https://api.open-meteo.com/v1/forecast?latitude=21.0285&longitude=105.8542&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FBangkok').then(r => r.json())
     ]);
 
-    // Lọc 5 tin tức mới nhất
     const items = [];
     const regex = /<item>[\s\S]*?<title>(.*?)<\/title>[\s\S]*?<link>(.*?)<\/link>/g;
     let match;
@@ -22,36 +20,32 @@ async function run() {
 
     let newsText = '';
     items.forEach((item, index) => {
-      newsText += `${index + 1}. ${item.title}\n🔗 ${item.link}\n\n`;
+      newsText += (index + 1) + '. ' + item.title + '\n🔗 ' + item.link + '\n\n';
     });
 
-    const now = new Date(Date.now() + 7 * 60 * 60 * 1000); // Giờ VN (UTC+7)
+    const now = new Date(Date.now() + 7 * 60 * 60 * 1000);
     const timeString = now.toISOString().slice(11, 16);
     const dateString = now.toLocaleDateString('vi-VN');
 
-    const message = `📢 BẢN TIN CẬP NHẬT (${timeString} - ${dateString}) 📢\n\n` +
-      `🌤️ Thời tiết: ${temp}°C | Độ ẩm: ${humidity}%\n\n` +
-      `📰 TOP 5 TIN TỨC MỚI NHẤT:\n\n` +
-      newsText +
-      `👇 Bấm vào nút bên dưới để chọn tin muốn tạo video tự động:`;
+    const makeVideoUrl = 'https://github.com/maihieuhieu98-ux/daily-news-bot/actions/workflows/make-video.yml';
 
-    // Tạo các nút bấm tương ứng với từng bài báo
+    const message = '📢 BẢN TIN CẬP NHẬT (' + timeString + ' - ' + dateString + ') 📢\n\n' +
+      '🌤️ Thời tiết: ' + temp + '°C | Độ ẩm: ' + humidity + '%\n\n' +
+      '📰 TOP 5 TIN TỨC MỚI NHẤT:\n\n' +
+      newsText +
+      '🎬 Muốn tạo video cho tin nào? Bấm vào link dưới đây:\n' +
+      makeVideoUrl;
+
     const inline_keyboard = [
       [
-        { text: '🎬 Tạo Video Tin 1', callback_data: 'vid_1' },
-        { text: '🎬 Tạo Video Tin 2', callback_data: 'vid_2' }
-      ],
-      [
-        { text: '🎬 Tạo Video Tin 3', callback_data: 'vid_3' },
-        { text: '🎬 Tạo Video Tin 4', callback_data: 'vid_4' }
-      ],
-      [
-        { text: '🎬 Tạo Video Tin 5', callback_data: 'vid_5' }
+        {
+          text: '🎬 BẤM VÀO ĐÂY ĐỂ TẠO VIDEO',
+          url: makeVideoUrl
+        }
       ]
     ];
 
-    // 2. Gửi tin nhắn Telegram kèm nút bấm
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    const res = await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -65,7 +59,7 @@ async function run() {
     });
 
     const data = await res.json();
-    console.log('Telegram response:', data.ok ? 'Sent with buttons successfully' : data);
+    console.log('Telegram response:', data.ok ? 'Sent successfully' : data);
   } catch (err) {
     console.error('Error:', err);
     process.exit(1);
