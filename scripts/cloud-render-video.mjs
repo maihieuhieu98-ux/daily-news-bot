@@ -91,21 +91,40 @@ async function downloadImage(url, dest) {
   fs.writeFileSync(dest, buf);
 }
 
-async function searchAdditionalImages(query, neededCount) {
+async function searchAdditionalImages(title, neededCount) {
   const results = [];
   try {
-    const bingUrl = 'https://www.bing.com/images/async?q=' + encodeURIComponent(query) + '&count=15';
-    const bRes = await fetch(bingUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-    const html = await bRes.text();
-    const matches = [...html.matchAll(/murl&quot;:&quot;(https?:\/\/[^&]+)&quot;/g)];
-    for (const m of matches) {
-      if (!results.includes(m[1])) {
-        results.push(m[1]);
-        if (results.length >= neededCount + 5) break;
-      }
+    const parts = title.split(/[:–—\-]/).map(s => s.trim()).filter(Boolean);
+    const queries = [];
+    if (parts.length > 0) queries.push(parts[0]);
+    if (parts.length > 1) queries.push(parts[1].slice(0, 40));
+    queries.push(title.slice(0, 50));
+
+    for (const q of queries) {
+      if (results.length >= neededCount + 5) break;
+      try {
+        const res1 = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(q)}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+        const html = await res1.text();
+        const vqdMatch = html.match(/vqd=([0-9-]+)/) || html.match(/vqd=["']([0-9-]+)["']/);
+        if (!vqdMatch) continue;
+        const vqd = vqdMatch[1];
+        const res2 = await fetch(`https://duckduckgo.com/i.js?l=wt-wt&o=json&q=${encodeURIComponent(q)}&vqd=${vqd}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+        });
+        const d = await res2.json();
+        const imgs = (d.results || []).map(r => r.image).filter(Boolean);
+        for (const img of imgs) {
+          if (!results.includes(img)) {
+            results.push(img);
+            if (results.length >= neededCount + 10) break;
+          }
+        }
+      } catch (e) {}
     }
-  } catch (e) {
-    console.error('Bing image search error:', e.message);
+  } catch (err) {
+    console.error('Image search error:', err.message);
   }
   return results;
 }
@@ -174,47 +193,57 @@ async function main() {
   const sapoMatch = html.match(/<div class="sapo"[^>]*>([\s\S]*?)<\/div>/i) || html.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
   const sapo = sapoMatch ? cleanHtml(sapoMatch[1]) : '';
 
-  const imgRegex = /https:\/\/[^\s"'>\\]+\.(?:jpg|jpeg|png|webp)/gi;
-  const rawImages = [...new Set(html.match(imgRegex) || [])];
-  const articleImages = rawImages.filter(img => 
-    img.includes('cdnchinhphu.vn') &&
-    !img.includes('logo') && 
-    !img.includes('favicon') && 
-    !img.includes('thumb_w/90') &&
-    !img.includes('zoom/90_56')
-  );
-
-  const slug = `2026-09-10-${slugify(ARTICLE_TITLE)}`;
-  const videoDir = path.resolve('videos', slug);
-  const publicDir = path.resolve('public', slug);
-  const imgDir = path.join(publicDir, 'images');
-
-  fs.mkdirSync(path.join(videoDir, 'script'), { recursive: true });
-  fs.mkdirSync(path.join(videoDir, 'output'), { recursive: true });
-  fs.mkdirSync(imgDir, { recursive: true });
-
-  const script = [
-    { text: ARTICLE_TITLE, type: 'hook' },
-    { text: sapo || ARTICLE_TITLE, type: 'body' },
-    { text: 'Thông tin chi tiết được đăng tải chính thức trên Báo Điện tử Chính phủ.', type: 'ending' }
-  ];
-
-  fs.writeFileSync(path.join(videoDir, 'script', 'script.json'), JSON.stringify({ script }, null, 2), 'utf8');
-
-  const downloadedImages = [];
-  for (let i = 0; i < Math.min(articleImages.length, 5); i++) {
-    const filename = `img${i + 1}.jpg`;
-    const dest = path.join(imgDir, filename);
-    try {
-      await downloadImage(articleImages[i], dest);
-      downloadedImages.push(filename);
-    } catch (e) {
-      console.error('Image download error:', e.message);
+  const imgRegex = /https:\/\/(?:bcp|bcp2)\.cdnchinhphu\.vn[^\s"'>\\]+\.(?:jpg|jpeg|png|webp)/gi;
+  const rawMatches = [...new Set(html.match(imgRegex) || [])];
+  
+  const seenFilenames = new Set();
+  const articleImages = [];
+  for (const img of rawMatches) {
+    const filename = img.split('/').pop().replace(/^thumb_w_\d+_/, '');
+    if (
+      !seenFilenames.has(filename) &&
+      !filename.includes('logo') &&
+      !filename.includes('qrcode') &&
+      !filename.includes('banner') &&
+      !filename.includes('footer') &&
+      !filename.includes('icon') &&
+      !filename.includes('bg_') &&
+      !img.includes('thumb_w/90') &&
+      !img.includes('zoom/90_56')
+    ) {
+      seenFilenames.add(filename);
+      const fullRes = img.replace('/thumb_w/777/', '/').replace('/thumb_w/200/', '/');
+      articleImages.push(fullRes);
     }
   }
 
+  console.log(`[CLOUD] Found ${articleImages.length} distinct high-res article photos.`);
+
+  const downloadedImages = [];
+
+  // Download from article photos first
+  for (const url of articleImages) {
+    if (downloadedImages.length >= 5) break;
+    const filename = `img${downloadedImages.length + 1}.jpg`;
+    const dest = path.join(imgDir, filename);
+    try {
+      await downloadImage(url, dest);
+      const stat = fs.statSync(dest);
+      if (stat.size > 10000) {
+        downloadedImages.push(filename);
+        console.log(`[IMAGE] Saved ${filename} from article (${(stat.size / 1024).toFixed(1)} KB)`);
+      } else {
+        fs.unlinkSync(dest);
+      }
+    } catch (e) {
+      console.warn(`[IMAGE] Failed downloading article image ${url}:`, e.message);
+    }
+  }
+
+  // If still less than 5, search DuckDuckGo with topic keywords
   if (downloadedImages.length < 5) {
     const needed = 5 - downloadedImages.length;
+    console.log(`[CLOUD] Searching ${needed} additional photos online...`);
     const extraUrls = await searchAdditionalImages(ARTICLE_TITLE, needed);
     for (const url of extraUrls) {
       if (downloadedImages.length >= 5) break;
@@ -222,10 +251,33 @@ async function main() {
       const dest = path.join(imgDir, filename);
       try {
         await downloadImage(url, dest);
-        downloadedImages.push(filename);
+        const stat = fs.statSync(dest);
+        if (stat.size > 15000) {
+          downloadedImages.push(filename);
+          console.log(`[IMAGE] Saved ${filename} from online search (${(stat.size / 1024).toFixed(1)} KB)`);
+        } else {
+          try { fs.unlinkSync(dest); } catch (e) {}
+        }
       } catch (e) {}
     }
   }
+
+  // Guarantee AT LEAST 5 files for 5 scenes
+  if (downloadedImages.length === 0) {
+    throw new Error('No images could be retrieved for this article');
+  }
+  const originalCount = downloadedImages.length;
+  while (downloadedImages.length < 5) {
+    const srcIndex = (downloadedImages.length) % originalCount;
+    const copySrc = path.join(imgDir, downloadedImages[srcIndex]);
+    const filename = `img${downloadedImages.length + 1}.jpg`;
+    const copyDest = path.join(imgDir, filename);
+    fs.copyFileSync(copySrc, copyDest);
+    downloadedImages.push(filename);
+    console.log(`[IMAGE] Replicated ${downloadedImages[srcIndex]} -> ${filename} to guarantee 5 scenes`);
+  }
+
+  console.log('[CLOUD] Total 5 image cues ready:', downloadedImages);
 
   // TTS
   console.log('[CLOUD] Running TTS...');
@@ -240,14 +292,22 @@ async function main() {
   const totalFrames = Math.max(900, durationInSeconds * 30);
 
   const cues = [];
-  const cueCount = downloadedImages.length || 1;
+  const cueCount = 5;
   const framesPerCue = Math.floor(totalFrames / cueCount);
+  const locationLabels = [
+    '📍 TIÊU ĐIỂM CHÍNH PHỦ',
+    '📍 THỜI SỰ TRONG NƯỚC',
+    '📍 HỘI NGHỊ TRIỂN KHAI',
+    '📍 CHỈ ĐẠO ĐIỀU HÀNH',
+    '📍 BÁO ĐIỆN TỬ CHÍNH PHỦ'
+  ];
+
   for (let i = 0; i < cueCount; i++) {
     cues.push({
-      file: downloadedImages[i] || 'img1.jpg',
+      file: downloadedImages[i],
       startFrame: i * framesPerCue,
       endFrame: (i === cueCount - 1) ? totalFrames : (i + 1) * framesPerCue + 15,
-      location: '📍 THỜI SỰ CHÍNH PHỦ'
+      location: locationLabels[i] || '📍 THỜI SỰ CHÍNH PHỦ'
     });
   }
 
