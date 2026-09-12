@@ -446,369 +446,359 @@ async function main() {
   }
 
   // Update Root.tsx
-  const rootContent = `import React from 'react';
-import {Composition, registerRoot} from 'remotion';
-import {Video, type VideoProps} from './Video';
-
-const defaultSlug = '${slug}';
-const defaultDuration = ${totalFrames};
-const defaultWidth = 1080;
-const defaultHeight = 1920;
-
-export const RemotionRoot: React.FC = () => (
-  <Composition
-    id="Video"
-    component={Video as any}
-    durationInFrames={defaultDuration}
-    fps={30}
-    width={defaultWidth}
-    height={defaultHeight}
-    defaultProps={{slug: defaultSlug} satisfies VideoProps}
-  />
-);
-registerRoot(RemotionRoot);
-`;
+  const rootContent = [
+    "import React from 'react';",
+    "import {Composition, registerRoot} from 'remotion';",
+    "import {Video, type VideoProps} from './Video';",
+    "",
+    "const defaultSlug = " + JSON.stringify(slug) + ";",
+    "const defaultDuration = " + totalFrames + ";",
+    "const defaultWidth = 1080;",
+    "const defaultHeight = 1920;",
+    "",
+    "export const RemotionRoot: React.FC = () => (",
+    "  <Composition",
+    "    id='Video'",
+    "    component={Video as any}",
+    "    durationInFrames={defaultDuration}",
+    "    fps={30}",
+    "    width={defaultWidth}",
+    "    height={defaultHeight}",
+    "    defaultProps={{slug: defaultSlug} satisfies VideoProps}",
+    "  />",
+    ");",
+    "registerRoot(RemotionRoot);",
+    ""
+  ].join('\n');
   fs.writeFileSync('src/Root.tsx', rootContent, 'utf8');
 
-  // Update VideoContent.tsx
+  // Update VideoContent.tsx safely using structured template
   const dateStr = new Date().toLocaleDateString('vi-VN');
   const safeArticleTitle = JSON.stringify(ARTICLE_TITLE);
 
-  const videoContentCode = `import React from 'react';
-import {
-  AbsoluteFill,
-  Audio,
-  Img,
-  interpolate,
-  staticFile,
-  useCurrentFrame,
-  useVideoConfig,
-} from 'remotion';
-import timelineData from '../public/${slug}/timeline.json';
-
-interface Word { word: string; start: number; end: number; }
-interface Segment { start: number; end: number; text: string; }
-interface ImageCue { file: string; startFrame: number; endFrame: number; location: string; }
-
-const IMAGE_CUES: ImageCue[] = ${JSON.stringify(cues, null, 2)};
-const ARTICLE_TITLE_TEXT = ${safeArticleTitle};
-
-export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const currentTime = frame / fps;
-
-  const musicVolume = interpolate(
-    frame,
-    [0, 25, ${totalFrames - 45}, ${totalFrames}],
-    [0, 0.10, 0.10, 0],
-    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }
-  );
-
-  const segments = timelineData.segments as Segment[];
-  const words = timelineData.words as Word[];
-
-  // Smart active segment: never fall back to beginning when in pause
-  let activeSegment = segments.find(
-    (seg) => currentTime >= seg.start - 0.15 && currentTime <= seg.end + 0.4
-  );
-  if (!activeSegment) {
-    const pastSegments = segments.filter((s) => s.start <= currentTime);
-    if (pastSegments.length > 0) {
-      activeSegment = pastSegments[pastSegments.length - 1];
-    } else {
-      activeSegment = segments[0];
-    }
-  }
-
-  const activeWords = words.filter(
-    (w) => w.start >= activeSegment.start - 0.15 && w.end <= activeSegment.end + 0.4
-  );
-
-  const currentCue = IMAGE_CUES.find(
-    (c) => frame >= c.startFrame && frame <= c.endFrame
-  ) || IMAGE_CUES[0];
-
-  return (
-    <AbsoluteFill
-      style={{
-        backgroundColor: '#9a0007',
-        backgroundImage:
-          'radial-gradient(circle at 50% 25%, #c8102e 0%, #680005 100%)',
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
-        overflow: 'hidden',
-      }}
-    >
-      <Audio src={staticFile(\`${slug}/voice.mp3\`)} volume={1.0} />
-      <Audio
-        src={staticFile('assets/news/music/nhac-video-test-ai.mp3')}
-        volume={musicVolume}
-      />
-
-      {/* Top Header Bar */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: 110,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 50px',
-          background:
-            'linear-gradient(180deg, rgba(60,0,5,0.95) 0%, rgba(90,0,10,0.7) 100%)',
-          borderBottom: '2px solid rgba(255,255,255,0.15)',
-          zIndex: 10,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div
-            style={{
-              backgroundColor: '#ffd200',
-              color: '#8b0000',
-              fontWeight: 900,
-              fontSize: 22,
-              letterSpacing: 1.5,
-              padding: '6px 14px',
-              borderRadius: 6,
-              textTransform: 'uppercase',
-            }}
-          >
-            Tin Nổi Bật
-          </div>
-          <span
-            style={{
-              color: '#ffffff',
-              fontSize: 22,
-              fontWeight: 800,
-              letterSpacing: 0.5,
-            }}
-          >
-            ${brand}
-          </span>
-        </div>
-      </div>
-
-      {/* Top Image Showcase (16:9 box with Ken Burns) */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 110,
-          left: 0,
-          width: 1080,
-          height: 608,
-          overflow: 'hidden',
-          backgroundColor: '#000000',
-        }}
-      >
-        {IMAGE_CUES.map((cue, idx) => {
-          const isVisible = frame >= cue.startFrame && frame <= cue.endFrame;
-          if (!isVisible) return null;
-          const cueFrames = cue.endFrame - cue.startFrame;
-          const cueProgress = (frame - cue.startFrame) / Math.max(1, cueFrames);
-          const scale = 1.05 + cueProgress * 0.08;
-          const translateY = cueProgress * -15;
-
-          const fadeIn = interpolate(frame - cue.startFrame, [0, 15], [0, 1], {
-            extrapolateLeft: 'clamp',
-            extrapolateRight: 'clamp',
-          });
-          const fadeOut = interpolate(cue.endFrame - frame, [0, 15], [0, 1], {
-            extrapolateLeft: 'clamp',
-            extrapolateRight: 'clamp',
-          });
-          const opacity = Math.min(fadeIn, fadeOut);
-
-          return (
-            <div
-              key={idx}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                opacity,
-                transform: \`scale(${scale}) translateY(${translateY}px)\`,
-                transformOrigin: 'center center',
-              }}
-            >
-              <Img
-                src={staticFile(\`${slug}/images/${cue.file}\`)}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            </div>
-          );
-        })}
-
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 16,
-            right: 24,
-            backgroundColor: 'rgba(0,0,0,0.75)',
-            backdropFilter: 'blur(8px)',
-            color: '#ffffff',
-            padding: '6px 14px',
-            borderRadius: 6,
-            fontSize: 18,
-            fontWeight: 700,
-            letterSpacing: 0.8,
-            border: '1px solid rgba(255,255,255,0.2)',
-            zIndex: 5,
-          }}
-        >
-          {currentCue.location}
-        </div>
-      </div>
-
-      {/* Gold Divider Ribbon */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 718,
-          left: 0,
-          width: '100%',
-          height: 6,
-          background: 'linear-gradient(90deg, #ffd200, #ffffff, #ffd200)',
-          boxShadow: '0 0 16px rgba(255, 210, 0, 0.8)',
-        }}
-      />
-
-      {/* Bottom Information & Subtitles Section */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 735,
-          left: 0,
-          width: 1080,
-          bottom: 0,
-          padding: '0 50px',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {/* Date & Tag */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            marginTop: 15,
-            marginBottom: 20,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: '#ffffff',
-              color: '#8b0000',
-              fontWeight: 800,
-              fontSize: 24,
-              padding: '6px 18px',
-              borderRadius: 999,
-              border: '2px solid #8b0000',
-            }}
-          >
-            ${dateStr}
-          </div>
-          <div
-            style={{
-              backgroundColor: 'rgba(255,210,0,0.25)',
-              color: '#ffd200',
-              border: '1.5px solid #ffd200',
-              fontWeight: 800,
-              fontSize: 22,
-              padding: '6px 18px',
-              borderRadius: 999,
-              letterSpacing: 0.5,
-            }}
-          >
-            TIN CHÍNH THỨC
-          </div>
-        </div>
-
-        {/* Dynamic Title (Scaled to fit without clipping) */}
-        <h1
-          style={{
-            fontSize: ARTICLE_TITLE_TEXT.length > 70 ? 36 : 42,
-            fontWeight: 900,
-            color: '#ffffff',
-            lineHeight: 1.35,
-            textTransform: 'uppercase',
-            letterSpacing: -0.5,
-            textShadow: '0 4px 16px rgba(0,0,0,0.7)',
-            margin: '0 0 24px 0',
-            display: '-webkit-box',
-            WebkitLineClamp: 3,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-        >
-          {ARTICLE_TITLE_TEXT}
-        </h1>
-
-        {/* Dynamic Subtitles Box with Real-time Word Karaoke Highlight */}
-        <div
-          style={{
-            flex: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: 'rgba(0, 0, 0, 0.50)',
-            backdropFilter: 'blur(16px)',
-            borderRadius: 24,
-            padding: '32px 40px',
-            border: '1.5px solid rgba(255, 210, 0, 0.35)',
-            boxShadow: '0 12px 36px rgba(0,0,0,0.5)',
-            marginBottom: 45,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 42,
-              fontWeight: 800,
-              lineHeight: 1.5,
-              textAlign: 'center',
-              display: 'flex',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              gap: '10px 14px',
-            }}
-          >
-            {activeWords.length > 0 ? (
-              activeWords.map((w, wIdx) => {
-                const isWordActive =
-                  currentTime >= w.start - 0.05 && currentTime <= w.end + 0.1;
-                return (
-                  <span
-                    key={wIdx}
-                    style={{
-                      color: isWordActive ? '#ffe135' : '#ffffff',
-                      textShadow: isWordActive
-                        ? '0 0 20px rgba(255, 225, 53, 0.95), 0 0 40px rgba(255, 210, 0, 0.7)'
-                        : '0 2px 8px rgba(0,0,0,0.6)',
-                      transform: isWordActive ? 'scale(1.12)' : 'scale(1)',
-                      transition: 'all 0.1s ease',
-                      display: 'inline-block',
-                    }}
-                  >
-                    {w.word}
-                  </span>
-                );
-              })
-            ) : (
-              <span style={{ color: '#ffffff' }}>{activeSegment?.text}</span>
-            )}
-          </div>
-        </div>
-      </div>
-    </AbsoluteFill>
-  );
-};
-`;
+  const videoContentCode = [
+    "import React from 'react';",
+    "import {",
+    "  AbsoluteFill,",
+    "  Audio,",
+    "  Img,",
+    "  interpolate,",
+    "  staticFile,",
+    "  useCurrentFrame,",
+    "  useVideoConfig,",
+    "} from 'remotion';",
+    "import timelineData from '../public/" + slug + "/timeline.json';",
+    "",
+    "interface Word { word: string; start: number; end: number; }",
+    "interface Segment { start: number; end: number; text: string; }",
+    "interface ImageCue { file: string; startFrame: number; endFrame: number; location: string; }",
+    "",
+    "const IMAGE_CUES: ImageCue[] = " + JSON.stringify(cues, null, 2) + ";",
+    "const ARTICLE_TITLE_TEXT = " + safeArticleTitle + ";",
+    "",
+    "export const VideoContent: React.FC<{ slug: string }> = ({ slug }) => {",
+    "  const frame = useCurrentFrame();",
+    "  const { fps } = useVideoConfig();",
+    "  const currentTime = frame / fps;",
+    "",
+    "  const musicVolume = interpolate(",
+    "    frame,",
+    "    [0, 25, " + (totalFrames - 45) + ", " + totalFrames + "],",
+    "    [0, 0.10, 0.10, 0],",
+    "    { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }",
+    "  );",
+    "",
+    "  const segments = timelineData.segments as Segment[];",
+    "  const words = timelineData.words as Word[];",
+    "",
+    "  let activeSegment = segments.find(",
+    "    (seg) => currentTime >= seg.start - 0.15 && currentTime <= seg.end + 0.4",
+    "  );",
+    "  if (!activeSegment) {",
+    "    const pastSegments = segments.filter((s) => s.start <= currentTime);",
+    "    if (pastSegments.length > 0) {",
+    "      activeSegment = pastSegments[pastSegments.length - 1];",
+    "    } else {",
+    "      activeSegment = segments[0];",
+    "    }",
+    "  }",
+    "",
+    "  const activeWords = words.filter(",
+    "    (w) => w.start >= activeSegment.start - 0.15 && w.end <= activeSegment.end + 0.4",
+    "  );",
+    "",
+    "  const currentCue = IMAGE_CUES.find(",
+    "    (c) => frame >= c.startFrame && frame <= c.endFrame",
+    "  ) || IMAGE_CUES[0];",
+    "",
+    "  return (",
+    "    <AbsoluteFill",
+    "      style={{",
+    "        backgroundColor: '#9a0007',",
+    "        backgroundImage: 'radial-gradient(circle at 50% 25%, #c8102e 0%, #680005 100%)',",
+    "        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',",
+    "        overflow: 'hidden',",
+    "      }}",
+    "    >",
+    "      <Audio src={staticFile(slug + '/voice.mp3')} volume={1.0} />",
+    "      <Audio src={staticFile('assets/news/music/nhac-video-test-ai.mp3')} volume={musicVolume} />",
+    "",
+    "      {/* Top Header Bar */}",
+    "      <div",
+    "        style={{",
+    "          position: 'absolute',",
+    "          top: 0,",
+    "          left: 0,",
+    "          width: '100%',",
+    "          height: 110,",
+    "          display: 'flex',",
+    "          alignItems: 'center',",
+    "          justifyContent: 'space-between',",
+    "          padding: '0 50px',",
+    "          background: 'linear-gradient(180deg, rgba(60,0,5,0.95) 0%, rgba(90,0,10,0.7) 100%)',",
+    "          borderBottom: '2px solid rgba(255,255,255,0.15)',",
+    "          zIndex: 10,",
+    "        }}",
+    "      >",
+    "        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>",
+    "          <div",
+    "            style={{",
+    "              backgroundColor: '#ffd200',",
+    "              color: '#8b0000',",
+    "              fontWeight: 900,",
+    "              fontSize: 22,",
+    "              letterSpacing: 1.5,",
+    "              padding: '6px 14px',",
+    "              borderRadius: 6,",
+    "              textTransform: 'uppercase',",
+    "            }}",
+    "          >",
+    "            Tin Nổi Bật",
+    "          </div>",
+    "          <span style={{ color: '#ffffff', fontSize: 22, fontWeight: 800, letterSpacing: 0.5 }}>",
+    "            " + JSON.stringify(brand).slice(1, -1),
+    "          </span>",
+    "        </div>",
+    "      </div>",
+    "",
+    "      {/* Top Image Showcase (16:9 box with Ken Burns) */}",
+    "      <div",
+    "        style={{",
+    "          position: 'absolute',",
+    "          top: 110,",
+    "          left: 0,",
+    "          width: 1080,",
+    "          height: 608,",
+    "          overflow: 'hidden',",
+    "          backgroundColor: '#000000',",
+    "        }}",
+    "      >",
+    "        {IMAGE_CUES.map((cue, idx) => {",
+    "          const isVisible = frame >= cue.startFrame && frame <= cue.endFrame;",
+    "          if (!isVisible) return null;",
+    "          const cueFrames = cue.endFrame - cue.startFrame;",
+    "          const cueProgress = (frame - cue.startFrame) / Math.max(1, cueFrames);",
+    "          const scale = 1.05 + cueProgress * 0.08;",
+    "          const translateY = cueProgress * -15;",
+    "",
+    "          const fadeIn = interpolate(frame - cue.startFrame, [0, 15], [0, 1], {",
+    "            extrapolateLeft: 'clamp',",
+    "            extrapolateRight: 'clamp',",
+    "          });",
+    "          const fadeOut = interpolate(cue.endFrame - frame, [0, 15], [0, 1], {",
+    "            extrapolateLeft: 'clamp',",
+    "            extrapolateRight: 'clamp',",
+    "          });",
+    "          const opacity = Math.min(fadeIn, fadeOut);",
+    "",
+    "          return (",
+    "            <div",
+    "              key={idx}",
+    "              style={{",
+    "                position: 'absolute',",
+    "                top: 0,",
+    "                left: 0,",
+    "                width: '100%',",
+    "                height: '100%',",
+    "                opacity,",
+    "                transform: 'scale(' + scale + ') translateY(' + translateY + 'px)',",
+    "                transformOrigin: 'center center',",
+    "              }}",
+    "            >",
+    "              <Img",
+    "                src={staticFile(slug + '/images/' + cue.file)}",
+    "                style={{ width: '100%', height: '100%', objectFit: 'cover' }}",
+    "              />",
+    "            </div>",
+    "          );",
+    "        })}",
+    "",
+    "        <div",
+    "          style={{",
+    "            position: 'absolute',",
+    "            bottom: 16,",
+    "            right: 24,",
+    "            backgroundColor: 'rgba(0,0,0,0.75)',",
+    "            backdropFilter: 'blur(8px)',",
+    "            color: '#ffffff',",
+    "            padding: '6px 14px',",
+    "            borderRadius: 6,",
+    "            fontSize: 18,",
+    "            fontWeight: 700,",
+    "            letterSpacing: 0.8,",
+    "            border: '1px solid rgba(255,255,255,0.2)',",
+    "            zIndex: 5,",
+    "          }}",
+    "        >",
+    "          {currentCue.location}",
+    "        </div>",
+    "      </div>",
+    "",
+    "      {/* Gold Divider Ribbon */}",
+    "      <div",
+    "        style={{",
+    "          position: 'absolute',",
+    "          top: 718,",
+    "          left: 0,",
+    "          width: '100%',",
+    "          height: 6,",
+    "          background: 'linear-gradient(90deg, #ffd200, #ffffff, #ffd200)',",
+    "          boxShadow: '0 0 16px rgba(255, 210, 0, 0.8)',",
+    "        }}",
+    "      />",
+    "",
+    "      {/* Bottom Information & Subtitles Section */}",
+    "      <div",
+    "        style={{",
+    "          position: 'absolute',",
+    "          top: 735,",
+    "          left: 0,",
+    "          width: 1080,",
+    "          bottom: 0,",
+    "          padding: '0 50px',",
+    "          display: 'flex',",
+    "          flexDirection: 'column',",
+    "        }}",
+    "      >",
+    "        {/* Date & Tag */}",
+    "        <div",
+    "          style={{",
+    "            display: 'flex',",
+    "            alignItems: 'center',",
+    "            gap: 16,",
+    "            marginTop: 15,",
+    "            marginBottom: 20,",
+    "          }}",
+    "        >",
+    "          <div",
+    "            style={{",
+    "              backgroundColor: '#ffffff',",
+    "              color: '#8b0000',",
+    "              fontWeight: 800,",
+    "              fontSize: 24,",
+    "              padding: '6px 18px',",
+    "              borderRadius: 999,",
+    "              border: '2px solid #8b0000',",
+    "            }}",
+    "          >",
+    "            " + JSON.stringify(dateStr).slice(1, -1),
+    "          </div>",
+    "          <div",
+    "            style={{",
+    "              backgroundColor: 'rgba(255,210,0,0.25)',",
+    "              color: '#ffd200',",
+    "              border: '1.5px solid #ffd200',",
+    "              fontWeight: 800,",
+    "              fontSize: 22,",
+    "              padding: '6px 18px',",
+    "              borderRadius: 999,",
+    "              letterSpacing: 0.5,",
+    "            }}",
+    "          >",
+    "            TIN CHÍNH THỨC",
+    "          </div>",
+    "        </div>",
+    "",
+    "        {/* Dynamic Title (Scaled to fit without clipping) */}",
+    "        <h1",
+    "          style={{",
+    "            fontSize: ARTICLE_TITLE_TEXT.length > 70 ? 36 : 42,",
+    "            fontWeight: 900,",
+    "            color: '#ffffff',",
+    "            lineHeight: 1.35,",
+    "            textTransform: 'uppercase',",
+    "            letterSpacing: -0.5,",
+    "            textShadow: '0 4px 16px rgba(0,0,0,0.7)',",
+    "            margin: '0 0 24px 0',",
+    "            display: '-webkit-box',",
+    "            WebkitLineClamp: 3,",
+    "            WebkitBoxOrient: 'vertical',",
+    "            overflow: 'hidden',",
+    "          }}",
+    "        >",
+    "          {ARTICLE_TITLE_TEXT}",
+    "        </h1>",
+    "",
+    "        {/* Dynamic Subtitles Box with Real-time Word Karaoke Highlight */}",
+    "        <div",
+    "          style={{",
+    "            flex: 1,",
+    "            display: 'flex',",
+    "            alignItems: 'center',",
+    "            justifyContent: 'center',",
+    "            backgroundColor: 'rgba(0, 0, 0, 0.50)',",
+    "            backdropFilter: 'blur(16px)',",
+    "            borderRadius: 24,",
+    "            padding: '32px 40px',",
+    "            border: '1.5px solid rgba(255, 210, 0, 0.35)',",
+    "            boxShadow: '0 12px 36px rgba(0,0,0,0.5)',",
+    "            marginBottom: 45,",
+    "          }}",
+    "        >",
+    "          <div",
+    "            style={{",
+    "              fontSize: 42,",
+    "              fontWeight: 800,",
+    "              lineHeight: 1.5,",
+    "              textAlign: 'center',",
+    "              display: 'flex',",
+    "              flexWrap: 'wrap',",
+    "              justifyContent: 'center',",
+    "              gap: '10px 14px',",
+    "            }}",
+    "          >",
+    "            {activeWords.length > 0 ? (",
+    "              activeWords.map((w, wIdx) => {",
+    "                const isWordActive =",
+    "                  currentTime >= w.start - 0.05 && currentTime <= w.end + 0.1;",
+    "                return (",
+    "                  <span",
+    "                    key={wIdx}",
+    "                    style={{",
+    "                      color: isWordActive ? '#ffe135' : '#ffffff',",
+    "                      textShadow: isWordActive",
+    "                        ? '0 0 20px rgba(255, 225, 53, 0.95), 0 0 40px rgba(255, 210, 0, 0.7)'",
+    "                        : '0 2px 8px rgba(0,0,0,0.6)',",
+    "                      transform: isWordActive ? 'scale(1.12)' : 'scale(1)',",
+    "                      transition: 'all 0.1s ease',",
+    "                      display: 'inline-block',",
+    "                    }}",
+    "                  >",
+    "                    {w.word}",
+    "                  </span>",
+    "                );",
+    "              })",
+    "            ) : (",
+    "              <span style={{ color: '#ffffff' }}>{activeSegment?.text}</span>",
+    "            )}",
+    "          </div>",
+    "        </div>",
+    "      </div>",
+    "    </AbsoluteFill>",
+    "  );",
+    "};",
+    ""
+  ].join('\n');
   fs.writeFileSync('src/VideoContent.tsx', videoContentCode, 'utf8');
 
   // Render video bằng Remotion trên runner
