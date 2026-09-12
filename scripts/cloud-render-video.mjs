@@ -193,6 +193,23 @@ async function main() {
   const sapoMatch = html.match(/<div class="sapo"[^>]*>([\s\S]*?)<\/div>/i) || html.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
   const sapo = sapoMatch ? cleanHtml(sapoMatch[1]) : '';
 
+  const slug = `2026-09-10-${slugify(ARTICLE_TITLE)}`;
+  const videoDir = path.resolve('videos', slug);
+  const publicDir = path.resolve('public', slug);
+  const imgDir = path.join(publicDir, 'images');
+
+  fs.mkdirSync(path.join(videoDir, 'script'), { recursive: true });
+  fs.mkdirSync(path.join(videoDir, 'output'), { recursive: true });
+  fs.mkdirSync(imgDir, { recursive: true });
+
+  const script = [
+    { text: ARTICLE_TITLE, type: 'hook' },
+    { text: sapo || ARTICLE_TITLE, type: 'body' },
+    { text: 'Thông tin chi tiết được đăng tải chính thức trên Báo Điện tử Chính phủ.', type: 'ending' }
+  ];
+
+  fs.writeFileSync(path.join(videoDir, 'script', 'script.json'), JSON.stringify({ script }, null, 2), 'utf8');
+
   const imgRegex = /https:\/\/(?:bcp|bcp2)\.cdnchinhphu\.vn[^\s"'>\\]+\.(?:jpg|jpeg|png|webp)/gi;
   const rawMatches = [...new Set(html.match(imgRegex) || [])];
   
