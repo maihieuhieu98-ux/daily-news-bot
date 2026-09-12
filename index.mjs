@@ -68,11 +68,19 @@ async function run() {
       `2. Chọn nút *Run workflow* màu xanh trên điện thoại\n` +
       `3. Chọn số thứ tự bài báo (1 - 5) rồi bấm Run ➔ Video Full HD sẽ tự gửi về Telegram cho bạn sau 2 phút!`;
 
+    const controllerUrl = 'https://maihieuhieu98-ux.github.io/daily-news-bot/';
+
     const inline_keyboard = [
       [
         {
-          text: '🎬 TẠO VIDEO REMOTION TRÊN CLOUD',
-          url: runActionUrl
+          text: '⚡️ BẤM VÀO ĐÂY ĐỂ CẬP NHẬT TIN MỚI NGAY',
+          url: controllerUrl
+        }
+      ],
+      [
+        {
+          text: '🎬 BẤM VÀO ĐÂY ĐỂ TẠO VIDEO (1-5)',
+          url: controllerUrl
         }
       ]
     ];
