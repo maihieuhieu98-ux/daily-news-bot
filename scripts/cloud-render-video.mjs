@@ -229,11 +229,11 @@ async function main() {
 
   // TTS
   console.log('[CLOUD] Running TTS...');
-  await execCommand('node', ['scripts/tts.mjs', `"videos/${slug}/script/script.json"`, `"${slug}"`]);
+  await execCommand('node', ['scripts/tts.mjs', `videos/${slug}/script/script.json`, slug]);
 
   // STT
   console.log('[CLOUD] Running STT Whisper...');
-  await execCommand('node', ['scripts/transcribe.mjs', `"${slug}"`]);
+  await execCommand('node', ['scripts/transcribe.mjs', slug]);
 
   const timeline = JSON.parse(fs.readFileSync(path.join(publicDir, 'timeline.json'), 'utf8'));
   const durationInSeconds = Math.ceil(timeline.duration + 1.2);
