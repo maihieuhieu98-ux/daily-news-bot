@@ -130,6 +130,21 @@ async function searchAdditionalImages(title, neededCount) {
 }
 
 async function resolveArticle() {
+  if (fs.existsSync('custom_task.json')) {
+    try {
+      const task = JSON.parse(fs.readFileSync('custom_task.json', 'utf8'));
+      if (task.url && typeof task.url === 'string' && task.url.startsWith('http') && (Date.now() - (task.timestamp || 0) < 30 * 60 * 1000)) {
+        console.log('[RESOLVE] Nhận link bài viết tùy chọn từ người dùng:', task.url);
+        ARTICLE_URL = task.url.trim();
+        ARTICLE_TITLE = (task.title || '').trim();
+        fs.writeFileSync('custom_task.json', JSON.stringify({ url: null, timestamp: 0 }, null, 2), 'utf8');
+        return;
+      }
+    } catch (e) {
+      console.warn('[RESOLVE] Failed reading custom_task.json:', e.message);
+    }
+  }
+
   if (ARTICLE_URL && ARTICLE_URL.startsWith('http')) {
     return;
   }
@@ -178,17 +193,28 @@ async function main() {
   await resolveArticle();
 
   console.log('🚀 CLOUD RENDER STARTED...');
-  console.log('Article:', ARTICLE_TITLE);
   console.log('URL:', ARTICLE_URL);
+
+  const res = await fetch(ARTICLE_URL, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
+  const html = await res.text();
+
+  if (!ARTICLE_TITLE) {
+    const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i) ||
+                       html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i) ||
+                       html.match(/<title>([\s\S]*?)<\/title>/i);
+    if (titleMatch) {
+      ARTICLE_TITLE = cleanHtml(titleMatch[1]).replace(/ - Báo Chính Phủ.*$/i, '').replace(/ - VnExpress.*$/i, '').replace(/ - Dân trí.*$/i, '').trim();
+    } else {
+      ARTICLE_TITLE = 'Bản Tin Thời Sự Mới Nhất';
+    }
+  }
+  console.log('Article:', ARTICLE_TITLE);
 
   await telegramApi('sendMessage', {
     chat_id: CHAT_ID,
     text: `⚡️ *ĐÃ NHẬN LỆNH TẠO VIDEO TRÊN CLOUD!*\n\n📌 *Bài viết:* ${ARTICLE_TITLE}\n☁️ *Máy chủ Microsoft GitHub:* Đang tải ảnh, tạo giọng đọc AI & render Remotion Full HD...\n⏱ Thời gian hoàn thành dự kiến: 2 - 3 phút.`,
     parse_mode: 'Markdown'
   });
-
-  const res = await fetch(ARTICLE_URL, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-  const html = await res.text();
 
   const sapoMatch = html.match(/<div class="sapo"[^>]*>([\s\S]*?)<\/div>/i) || html.match(/<h2[^>]*>([\s\S]*?)<\/h2>/i);
   const sapo = sapoMatch ? cleanHtml(sapoMatch[1]) : '';
