@@ -930,7 +930,6 @@ async function main() {
     'src/Root.tsx',
     'Video',
     outputMp4,
-    '--props', JSON.stringify({ slug }),
     '--concurrency=2',
     '--log=warn'
   ]);
@@ -942,11 +941,26 @@ async function main() {
   const stat = fs.statSync(outputMp4);
   console.log(`✅ VIDEO RENDERED SUCCESSFULLY: ${outputMp4} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
 
-  // SEND TO TELEGRAM
+  // SEND TO TELEGRAM VIA NATIVE FORMDATA & FETCH
   console.log('📤 Sending video to Telegram...');
-  const curlCmd = `curl -v -F chat_id="${CHAT_ID}" -F video=@"${outputMp4}" -F caption="🎬 *VIDEO THỜI SỰ REMOTION FULL HD (CLOUDFLOUD)*\n\n📌 *${ARTICLE_TITLE}*\n📰 *Nguồn:* ${brand}\n⏱ *Thời lượng:* ${durationInSeconds} giây\n✨ *Độ phân giải:* 1080x1920 (9:16 Shorts/Reels/TikTok)\n🤖 *Tự động sản xuất & render 100% trên Cloud bởi AI*" -F parse_mode="Markdown" "https://api.telegram.org/bot${BOT_TOKEN}/sendVideo"`;
+  const safeTitle = ARTICLE_TITLE.replace(/[*_`\[\]]/g, '');
+  const caption = `🎬 *VIDEO THỜI SỰ REMOTION FULL HD (CLOUD 24/7)*\n\n📌 *${safeTitle}*\n📰 *Nguồn:* ${brand}\n⏱ *Thời lượng:* ${durationInSeconds} giây\n✨ *Độ phân giải:* 1080x1920 (9:16 Shorts/Reels/TikTok)\n🤖 *Tự động sản xuất & render 100% trên Cloud bởi AI*`;
 
-  await execCommand(curlCmd, []);
+  const videoBuffer = fs.readFileSync(outputMp4);
+  const blob = new Blob([videoBuffer], { type: 'video/mp4' });
+  const formData = new FormData();
+  formData.append('chat_id', CHAT_ID);
+  formData.append('caption', caption);
+  formData.append('parse_mode', 'Markdown');
+  formData.append('video', blob, 'video.mp4');
+
+  const tgRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, {
+    method: 'POST',
+    body: formData
+  });
+  const tgData = await tgRes.json();
+  console.log('Telegram sendVideo response:', tgData.ok);
+
   console.log('🎉 ALL TASKS FINISHED SUCCESSFULLY!');
 }
 
