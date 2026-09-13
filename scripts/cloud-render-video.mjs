@@ -104,7 +104,7 @@ function getSourceBrand(url) {
 }
 
 async function downloadImage(url, dest) {
-  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  const res = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } });
   if (!res.ok) throw new Error(`Status ${res.status}`);
   const buf = Buffer.from(await res.arrayBuffer());
   fs.writeFileSync(dest, buf);
@@ -302,7 +302,7 @@ async function main() {
 
   await telegramApi('sendMessage', {
     chat_id: CHAT_ID,
-    text: `⚡️ *ĐÃ NHẬN LỆNH TẠO VIDEO TRÊN CLOUD!*\n\n📌 *Bài viết:* ${ARTICLE_TITLE}\n📰 *Nguồn:* ${brand}\n☁️ *Máy chủ Microsoft GitHub:* Đang biên soạn kịch bản AI, thu âm giọng đọc và render video chuẩn Remotion...\n⏱ Thời gian hoàn thành dự kiến: 2 - 3 phút.`,
+    text: `⚡️ *ĐÃ NHẬN LỆNH TẠO VIDEO TRÊN CLOUD!*\n\n📌 *Bài viết:* ${ARTICLE_TITLE}\n📰 *Nguồn:* ${brand}\n☁️ *Máy chủ Microsoft GitHub:* Đang biên soạn kịch bản AI, tải hình ảnh và render video chuẩn Remotion 9:16...\n⏱ Thời gian hoàn thành dự kiến: 2 - 3 phút.`,
     parse_mode: 'Markdown'
   });
 
@@ -322,18 +322,25 @@ async function main() {
 
   fs.writeFileSync(path.join(videoDir, 'script', 'script.json'), JSON.stringify({ script }, null, 2), 'utf8');
 
-  // Generic image extraction: find all article image urls
+  // Generic image extraction with filename deduplication
   const ogImgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
   const articleImages = [];
+  const seenBaseNames = new Set();
+
   if (ogImgMatch && ogImgMatch[1].startsWith('http')) {
-    articleImages.push(ogImgMatch[1].trim());
+    const rawOg = ogImgMatch[1].trim();
+    const baseOg = rawOg.split('/').pop().replace(/\?.*$/, '');
+    articleImages.push(rawOg);
+    seenBaseNames.add(baseOg);
   }
 
   const allImgMatches = html.match(/https?:\/\/[^\s"'><)]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'><)]*)?/gi) || [];
   for (const img of allImgMatches) {
     const lower = img.toLowerCase();
+    const baseName = img.split('/').pop().replace(/\?.*$/, '').replace(/^thumb_w_\d+_/, '').replace(/^w\d+_/, '');
+
     if (
-      !articleImages.includes(img) &&
+      !seenBaseNames.has(baseName) &&
       !lower.includes('logo') &&
       !lower.includes('avatar') &&
       !lower.includes('icon') &&
@@ -342,20 +349,26 @@ async function main() {
       !lower.includes('footer') &&
       !lower.includes('tracking') &&
       !lower.includes('pixel') &&
-      !lower.includes('1x1')
+      !lower.includes('1x1') &&
+      !lower.includes('mask-') &&
+      !lower.includes('bg-')
     ) {
-      articleImages.push(img);
+      seenBaseNames.add(baseName);
+      // Try to get full resolution
+      const fullRes = img.replace('/thumb_w/777/', '/').replace('/thumb_w/200/', '/').replace('/w1250/', '/').replace('/w1210/', '/');
+      articleImages.push(fullRes);
     }
   }
 
-  console.log(`[CLOUD] Tìm thấy ${articleImages.length} link ảnh tiềm năng trong bài báo.`);
+  console.log(`[CLOUD] Tìm thấy ${articleImages.length} ảnh độc lập trong bài báo.`);
 
   const downloadedImages = [];
 
   // Download from article photos first
   for (const url of articleImages) {
     if (downloadedImages.length >= 5) break;
-    const filename = `img${downloadedImages.length + 1}.jpg`;
+    const ext = url.includes('.png') ? 'png' : (url.includes('.webp') ? 'webp' : 'jpg');
+    const filename = `img${downloadedImages.length + 1}.${ext}`;
     const dest = path.join(imgDir, filename);
     try {
       await downloadImage(url, dest);
@@ -376,7 +389,8 @@ async function main() {
     const extraUrls = await searchAdditionalImages(ARTICLE_TITLE, needed);
     for (const url of extraUrls) {
       if (downloadedImages.length >= 5) break;
-      const filename = `img${downloadedImages.length + 1}.jpg`;
+      const ext = url.includes('.png') ? 'png' : (url.includes('.webp') ? 'webp' : 'jpg');
+      const filename = `img${downloadedImages.length + 1}.${ext}`;
       const dest = path.join(imgDir, filename);
       try {
         await downloadImage(url, dest);
@@ -399,7 +413,8 @@ async function main() {
   while (downloadedImages.length < 5) {
     const srcIndex = (downloadedImages.length) % originalCount;
     const copySrc = path.join(imgDir, downloadedImages[srcIndex]);
-    const filename = `img${downloadedImages.length + 1}.jpg`;
+    const ext = downloadedImages[srcIndex].split('.').pop();
+    const filename = `img${downloadedImages.length + 1}.${ext}`;
     const copyDest = path.join(imgDir, filename);
     fs.copyFileSync(copySrc, copyDest);
     downloadedImages.push(filename);
@@ -534,16 +549,48 @@ async function main() {
     "  return (",
     "    <AbsoluteFill",
     "      style={{",
-    "        backgroundColor: '#9a0007',",
-    "        backgroundImage: 'radial-gradient(circle at 50% 25%, #c8102e 0%, #680005 100%)',",
-    "        fontFamily: 'sans-serif',",
+    "        backgroundColor: '#0a0003',",
+    "        fontFamily: '-apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif',",
     "        overflow: 'hidden',",
     "      }}",
     "    >",
     "      <Audio src={staticFile(slug + '/voice.mp3')} volume={1.0} />",
     "      <Audio src={staticFile('assets/news/music/nhac-video-test-ai.mp3')} volume={musicVolume} />",
     "",
-    "      {/* Top Header Bar */}",
+    "      {/* 1. DYNAMIC FULLSCREEN AMBIENT BACKGROUND (Eliminates any blank void!) */}",
+    "      {IMAGE_CUES.map((cue, idx) => {",
+    "        const isVisible = frame >= cue.startFrame && frame <= cue.endFrame;",
+    "        if (!isVisible) return null;",
+    "        const cueFrames = cue.endFrame - cue.startFrame;",
+    "        const cueProgress = (frame - cue.startFrame) / Math.max(1, cueFrames);",
+    "        const scale = 1.2 + cueProgress * 0.05;",
+    "        const fadeIn = interpolate(frame - cue.startFrame, [0, 15], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });",
+    "        const fadeOut = interpolate(cue.endFrame - frame, [0, 15], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });",
+    "        const opacity = Math.min(fadeIn, fadeOut) * 0.45;",
+    "        return (",
+    "          <div",
+    "            key={'bg-' + idx}",
+    "            style={{",
+    "              position: 'absolute',",
+    "              top: 0,",
+    "              left: 0,",
+    "              width: '100%',",
+    "              height: '100%',",
+    "              opacity,",
+    "              filter: 'blur(45px) brightness(0.5)',",
+    "              transform: 'scale(' + scale + ')',",
+    "              transformOrigin: 'center center',",
+    "            }}",
+    "          >",
+    "            <Img",
+    "              src={staticFile(slug + '/images/' + cue.file)}",
+    "              style={{ width: '100%', height: '100%', objectFit: 'cover' }}",
+    "            />",
+    "          </div>",
+    "        );",
+    "      })}",
+    "",
+    "      {/* 2. TOP HEADER BRANDING BAR */}",
     "      <div",
     "        style={{",
     "          position: 'absolute',",
@@ -555,9 +602,9 @@ async function main() {
     "          alignItems: 'center',",
     "          justifyContent: 'space-between',",
     "          padding: '0 50px',",
-    "          background: 'linear-gradient(180deg, rgba(60,0,5,0.95) 0%, rgba(90,0,10,0.7) 100%)',",
-    "          borderBottom: '2px solid rgba(255,255,255,0.15)',",
-    "          zIndex: 10,",
+    "          background: 'linear-gradient(180deg, rgba(20,0,5,0.95) 0%, rgba(40,0,10,0.6) 100%)',",
+    "          borderBottom: '1.5px solid rgba(255, 210, 0, 0.25)',",
+    "          zIndex: 20,",
     "        }}",
     "      >",
     "        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>",
@@ -575,22 +622,25 @@ async function main() {
     "          >",
     "            Tin Nổi Bật",
     "          </div>",
-    "          <span style={{ color: '#ffffff', fontSize: 22, fontWeight: 800, letterSpacing: 0.5 }}>",
+    "          <span style={{ color: '#ffffff', fontSize: 24, fontWeight: 800, letterSpacing: 0.5 }}>",
     "            " + JSON.stringify(brand).slice(1, -1),
     "          </span>",
     "        </div>",
     "      </div>",
     "",
-    "      {/* Top Image Showcase (16:9 box with Ken Burns) */}",
+    "      {/* 3. HERO IMAGE SHOWCASE (Large, Prominent 16:10 Card in Upper-Center) */}",
     "      <div",
     "        style={{",
     "          position: 'absolute',",
-    "          top: 110,",
-    "          left: 0,",
-    "          width: 1080,",
-    "          height: 608,",
+    "          top: 130,",
+    "          left: 50,",
+    "          width: 980,",
+    "          height: 740,",
+    "          borderRadius: 24,",
     "          overflow: 'hidden',",
-    "          backgroundColor: '#000000',",
+    "          backgroundColor: '#111111',",
+    "          boxShadow: '0 25px 60px rgba(0,0,0,0.75), 0 0 0 1.5px rgba(255,255,255,0.15)',",
+    "          zIndex: 15,",
     "        }}",
     "      >",
     "        {IMAGE_CUES.map((cue, idx) => {",
@@ -613,7 +663,7 @@ async function main() {
     "",
     "          return (",
     "            <div",
-    "              key={idx}",
+    "              key={'hero-' + idx}",
     "              style={{",
     "                position: 'absolute',",
     "                top: 0,",
@@ -633,60 +683,50 @@ async function main() {
     "          );",
     "        })}",
     "",
+    "        {/* Location Tag Badge inside Card */}",
     "        <div",
     "          style={{",
     "            position: 'absolute',",
-    "            bottom: 16,",
+    "            bottom: 20,",
     "            right: 24,",
-    "            backgroundColor: 'rgba(0,0,0,0.75)',",
-    "            backdropFilter: 'blur(8px)',",
-    "            color: '#ffffff',",
-    "            padding: '6px 14px',",
-    "            borderRadius: 6,",
-    "            fontSize: 18,",
-    "            fontWeight: 700,",
+    "            backgroundColor: 'rgba(0,0,0,0.8)',",
+    "            backdropFilter: 'blur(10px)',",
+    "            color: '#ffd200',",
+    "            padding: '8px 18px',",
+    "            borderRadius: 8,",
+    "            fontSize: 19,",
+    "            fontWeight: 800,",
     "            letterSpacing: 0.8,",
-    "            border: '1px solid rgba(255,255,255,0.2)',",
-    "            zIndex: 5,",
+    "            border: '1px solid rgba(255, 210, 0, 0.4)',",
+    "            boxShadow: '0 4px 15px rgba(0,0,0,0.5)',",
+    "            zIndex: 18,",
     "          }}",
     "        >",
     "          {currentCue.location}",
     "        </div>",
     "      </div>",
     "",
-    "      {/* Gold Divider Ribbon */}",
+    "      {/* 4. LOWER CONTENT SECTION */}",
     "      <div",
     "        style={{",
     "          position: 'absolute',",
-    "          top: 718,",
-    "          left: 0,",
-    "          width: '100%',",
-    "          height: 6,",
-    "          background: 'linear-gradient(90deg, #ffd200, #ffffff, #ffd200)',",
-    "          boxShadow: '0 0 16px rgba(255, 210, 0, 0.8)',",
-    "        }}",
-    "      />",
-    "",
-    "      {/* Bottom Information & Subtitles Section */}",
-    "      <div",
-    "        style={{",
-    "          position: 'absolute',",
-    "          top: 735,",
+    "          top: 890,",
     "          left: 0,",
     "          width: 1080,",
     "          bottom: 0,",
-    "          padding: '0 50px',",
+    "          padding: '20px 50px 40px 50px',",
     "          display: 'flex',",
     "          flexDirection: 'column',",
+    "          zIndex: 16,",
+    "          background: 'linear-gradient(180deg, rgba(10,0,3,0) 0%, rgba(10,0,3,0.85) 15%, rgba(10,0,3,0.98) 40%)',",
     "        }}",
     "      >",
-    "        {/* Date & Tag */}",
+    "        {/* Date & Status Badges */}",
     "        <div",
     "          style={{",
     "            display: 'flex',",
     "            alignItems: 'center',",
     "            gap: 16,",
-    "            marginTop: 15,",
     "            marginBottom: 20,",
     "          }}",
     "        >",
@@ -719,7 +759,7 @@ async function main() {
     "          </div>",
     "        </div>",
     "",
-    "        {/* Dynamic Title (Scaled to fit without clipping) */}",
+    "        {/* Main Headline */}",
     "        <h1",
     "          style={{",
     "            fontSize: ARTICLE_TITLE_TEXT.length > 70 ? 36 : 42,",
@@ -728,8 +768,8 @@ async function main() {
     "            lineHeight: 1.35,",
     "            textTransform: 'uppercase',",
     "            letterSpacing: -0.5,",
-    "            textShadow: '0 4px 16px rgba(0,0,0,0.7)',",
-    "            margin: '0 0 24px 0',",
+    "            textShadow: '0 4px 20px rgba(0,0,0,0.9)',",
+    "            margin: '0 0 25px 0',",
     "            display: '-webkit-box',",
     "            WebkitLineClamp: 3,",
     "            WebkitBoxOrient: 'vertical',",
@@ -739,25 +779,25 @@ async function main() {
     "          {ARTICLE_TITLE_TEXT}",
     "        </h1>",
     "",
-    "        {/* Dynamic Subtitles Box with Real-time Word Karaoke Highlight */}",
+    "        {/* Dynamic Subtitle Karaoke Container */}",
     "        <div",
     "          style={{",
     "            flex: 1,",
     "            display: 'flex',",
     "            alignItems: 'center',",
     "            justifyContent: 'center',",
-    "            backgroundColor: 'rgba(0, 0, 0, 0.50)',",
-    "            backdropFilter: 'blur(16px)',",
+    "            backgroundColor: 'rgba(0, 0, 0, 0.65)',",
+    "            backdropFilter: 'blur(20px)',",
     "            borderRadius: 24,",
-    "            padding: '32px 40px',",
-    "            border: '1.5px solid rgba(255, 210, 0, 0.35)',",
-    "            boxShadow: '0 12px 36px rgba(0,0,0,0.5)',",
-    "            marginBottom: 45,",
+    "            padding: '36px 40px',",
+    "            border: '1.5px solid rgba(255, 210, 0, 0.4)',",
+    "            boxShadow: '0 16px 40px rgba(0,0,0,0.6)',",
+    "            marginBottom: 35,",
     "          }}",
     "        >",
     "          <div",
     "            style={{",
-    "              fontSize: 42,",
+    "              fontSize: 44,",
     "              fontWeight: 800,",
     "              lineHeight: 1.5,",
     "              textAlign: 'center',",
@@ -777,7 +817,7 @@ async function main() {
     "                    style={{",
     "                      color: isWordActive ? '#ffe135' : '#ffffff',",
     "                      textShadow: isWordActive",
-    "                        ? '0 0 20px rgba(255, 225, 53, 0.95), 0 0 40px rgba(255, 210, 0, 0.7)'",
+    "                        ? '0 0 25px rgba(255, 225, 53, 0.95), 0 0 45px rgba(255, 210, 0, 0.7)'",
     "                        : '0 2px 8px rgba(0,0,0,0.6)',",
     "                      transform: isWordActive ? 'scale(1.12)' : 'scale(1)',",
     "                      transition: 'all 0.1s ease',",
@@ -820,7 +860,7 @@ async function main() {
   const formData = new FormData();
   formData.append('chat_id', CHAT_ID);
   formData.append('video', new Blob([videoBuffer], { type: 'video/mp4' }), path.basename(outputPath));
-  formData.append('caption', `🎬 *BẢN TIN VIDEO CHÍNH THỨC (CHẤT LƯỢNG CAO)*\n\n📌 *${ARTICLE_TITLE}*\n📰 *Nguồn:* ${brand}\n⏱ Thời lượng: ${durationInSeconds}s (Full HD 1080x1920 9:16)\n\n_Tự động khớp 100% kịch bản AI, giọng đọc và phụ đề karaoke từng từ!_ 🚀`);
+  formData.append('caption', `🎬 *BẢN TIN VIDEO CHÍNH THỨC (CHẤT LƯỢNG CAO)*\n\n📌 *${ARTICLE_TITLE}*\n📰 *Nguồn:* ${brand}\n⏱ Thời lượng: ${durationInSeconds}s (Full HD 1080x1920 9:16)\n\n_Tự động khớp 100% kịch bản AI, giọng đọc, hình ảnh sống động và phụ đề karaoke từng từ!_ 🚀`);
   formData.append('parse_mode', 'Markdown');
 
   const tgRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, {
