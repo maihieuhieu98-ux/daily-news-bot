@@ -118,7 +118,6 @@
 
     let pendingTarget = { type: '', value: '' };
 
-    // 1. Quét tin tức nhanh
     async function triggerNews() {
       const btn = document.getElementById('btnNews');
       const st = document.getElementById('statusNews');
@@ -128,7 +127,7 @@
       st.innerHTML = '⏳ Đang gửi yêu cầu đến máy chủ Cloud...';
 
       try {
-        const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/356287443/dispatches`, {
+        const res = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/news.yml/dispatches`, {
           method: 'POST',
           headers: {
             'Authorization': 'Bearer ' + G_TOKEN,
@@ -156,7 +155,6 @@
       }
     }
 
-    // 2. Mở hộp thoại xác nhận tạo video
     function promptVideoConfirmation() {
       const customUrl = document.getElementById('customUrl').value.trim();
       const newsIndex = document.getElementById('newsIndex').value;
@@ -182,7 +180,6 @@
       document.getElementById('confirmModal').classList.remove('active');
     }
 
-    // 3. Thực thi tạo video khi người dùng bấm xác nhận
     async function executeVideoGeneration() {
       closeModal();
       const st = document.getElementById('statusVideo');
@@ -193,26 +190,26 @@
       st.innerHTML = '⏳ Đang khởi động hệ thống sản xuất video Remotion Cloud...';
 
       try {
-        if (pendingTarget.type === 'custom_url') {
-          // Lấy SHA của custom_task.json
-          let sha = null;
-          try {
-            const getRes = await fetch(`https://api.github.com/repos/${REPO}/contents/custom_task.json`, {
-              headers: { 'Authorization': 'Bearer ' + G_TOKEN }
-            });
-            if (getRes.ok) {
-              const data = await getRes.json();
-              sha = data.sha;
-            }
-          } catch (e) {}
+        let sha = null;
+        try {
+          const getRes = await fetch(`https://api.github.com/repos/${REPO}/contents/custom_task.json`, {
+            headers: { 'Authorization': 'Bearer ' + G_TOKEN }
+          });
+          if (getRes.ok) {
+            const data = await getRes.json();
+            sha = data.sha;
+          }
+        } catch (e) {}
 
-          // Ghi đè custom_task.json với link bài viết của người dùng
+        if (pendingTarget.type === 'custom_url') {
           const payload = {
+            mode: 'custom_url',
             url: pendingTarget.value,
+            consumed: false,
             timestamp: Date.now()
           };
 
-          const putRes = await fetch(`https://api.github.com/repos/${REPO}/contents/custom_task.json`, {
+          await fetch(`https://api.github.com/repos/${REPO}/contents/custom_task.json`, {
             method: 'PUT',
             headers: {
               'Authorization': 'Bearer ' + G_TOKEN,
@@ -225,33 +222,71 @@
             })
           });
 
-          if (!putRes.ok) {
-            throw new Error('Không thể nạp link bài viết lên máy chủ: ' + putRes.status);
+          const dispatchRes = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/make-video.yml/dispatches`, {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + G_TOKEN,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              ref: 'main',
+              inputs: {
+                news_index: '1'
+              }
+            })
+          });
+
+          if (!dispatchRes.ok && dispatchRes.status !== 204) {
+            throw new Error('Lỗi khởi động render: ' + dispatchRes.status);
+          }
+        } else {
+          // INDEX MODE (1 to 5): Reset custom_task.json to guarantee NO collision!
+          const payload = {
+            mode: 'index',
+            index: parseInt(pendingTarget.value, 10),
+            url: null,
+            consumed: true,
+            timestamp: Date.now()
+          };
+
+          await fetch(`https://api.github.com/repos/${REPO}/contents/custom_task.json`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': 'Bearer ' + G_TOKEN,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              message: 'Clear custom task for clean index selection',
+              content: btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2)))),
+              sha: sha || undefined
+            })
+          });
+
+          const dispatchRes = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/make-video.yml/dispatches`, {
+            method: 'POST',
+            headers: {
+              'Authorization': 'Bearer ' + G_TOKEN,
+              'Accept': 'application/vnd.github.v3+json',
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              ref: 'main',
+              inputs: {
+                news_index: pendingTarget.value
+              }
+            })
+          });
+
+          if (!dispatchRes.ok && dispatchRes.status !== 204) {
+            throw new Error('Lỗi khởi động render: ' + dispatchRes.status);
           }
         }
 
-        // Kích hoạt workflow render
-        const dispatchRes = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/make-video.yml/dispatches`, {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + G_TOKEN,
-            'Accept': 'application/vnd.github.v3+json',
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            ref: 'main',
-            inputs: { news_index: (pendingTarget.type === 'index' ? pendingTarget.value : '1') }
-          })
-        });
+        st.className = 'alert success';
+        st.innerHTML = `🎬 <b>ĐÃ PHÁT LỆNH THÀNH CÔNG!</b><br>Cloud đang tải ảnh báo chí chất lượng cao, tạo giọng đọc AI, đồng bộ phụ đề và render video Full HD.<br>File MP4 sẽ tự động gửi thẳng về <b>Telegram</b> của bạn sau <b>2 phút</b>!`;
+        document.getElementById('customUrl').value = '';
 
-        if (dispatchRes.status === 204 || dispatchRes.ok) {
-          st.className = 'alert success';
-          st.innerHTML = `🎬 <b>ĐÃ PHÁT LỆNH THÀNH CÔNG!</b><br>Cloud đang tải ảnh, tạo giọng đọc AI, đồng bộ phụ đề và render video Full HD.<br>File MP4 sẽ tự động gửi thẳng về <b>Telegram</b> của bạn sau <b>2 phút</b>!`;
-          document.getElementById('customUrl').value = '';
-        } else {
-          st.className = 'alert error';
-          st.innerHTML = '❌ Lỗi khởi động render: ' + dispatchRes.status;
-        }
       } catch (err) {
         st.className = 'alert error';
         st.innerHTML = '❌ Lỗi: ' + err.message;
