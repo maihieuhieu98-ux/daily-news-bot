@@ -152,7 +152,9 @@ async function resolveArticle() {
   if (fs.existsSync('custom_task.json')) {
     try {
       const task = JSON.parse(fs.readFileSync('custom_task.json', 'utf8'));
-      if (task.url && typeof task.url === 'string' && task.url.startsWith('http') && (Date.now() - (task.timestamp || 0) < 30 * 60 * 1000)) {
+      const timeVal = task.timestamp || (task.requestedAt ? new Date(task.requestedAt).getTime() : 0);
+      const isFresh = timeVal ? (Date.now() - timeVal < 3 * 60 * 60 * 1000) : true;
+      if (task.url && typeof task.url === 'string' && task.url.startsWith('http') && isFresh) {
         console.log('[RESOLVE] Nhận link bài viết tùy chọn từ người dùng:', task.url);
         ARTICLE_URL = task.url.trim();
         ARTICLE_TITLE = (task.title || '').trim();
