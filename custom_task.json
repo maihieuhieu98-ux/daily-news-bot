@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://kenh14.vn/tim-thay-thi-the-thieu-ta-quan-doi-mat-tich-khi-nhay-song-tra-ly-cuu-nguoi-215260913191552091.chn",
-  "consumed": false,
-  "timestamp": 1789312158478
+  "mode": "index",
+  "index": 1,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789312540014
 }
