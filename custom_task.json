@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://tuoitre.vn/tong-cong-ty-thiet-bi-dien-dong-anh-thong-tin-ve-viec-khoi-to-cuu-chu-tich-tong-cong-ty-truyen-tai-dien-quoc-gia-100260913154534717.htm",
-  "consumed": false,
-  "timestamp": 1789300561871
+  "mode": "index",
+  "index": 5,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789301056436
 }
