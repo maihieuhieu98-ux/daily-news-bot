@@ -20,8 +20,8 @@ import https from 'node:https';
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const CHAT_ID = process.env.CHAT_ID;
-let ARTICLE_URL = process.env.ARTICLE_URL;
-let ARTICLE_TITLE = process.env.ARTICLE_TITLE;
+let ARTICLE_URL = process.env.ARTICLE_URL ? process.env.ARTICLE_URL.trim() : '';
+let ARTICLE_TITLE = process.env.ARTICLE_TITLE ? process.env.ARTICLE_TITLE.trim() : '';
 const NEWS_INDEX = parseInt(process.env.NEWS_INDEX || '1', 10);
 
 const RSS_FEEDS = [
@@ -117,13 +117,17 @@ async function searchAdditionalImages(title, neededCount) {
     const queries = [];
     if (parts.length > 0) queries.push(parts[0]);
     if (parts.length > 1) queries.push(parts[1].slice(0, 40));
+    const words = title.replace(/[^\p{L}\s]/gu, ' ').split(/\s+/).filter(Boolean);
+    if (words.length > 4) {
+      queries.push(words.slice(0, 6).join(' '));
+    }
     queries.push(title.slice(0, 50));
 
     for (const q of queries) {
       if (results.length >= neededCount + 5) break;
       try {
         const res1 = await fetch(`https://duckduckgo.com/?q=${encodeURIComponent(q)}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
         });
         const html = await res1.text();
         const vqdMatch = html.match(/vqd=([0-9-]+)/) || html.match(/vqd=["']([0-9-]+)["']/);
@@ -135,7 +139,7 @@ async function searchAdditionalImages(title, neededCount) {
         const d = await res2.json();
         const imgs = (d.results || []).map(r => r.image).filter(Boolean);
         for (const img of imgs) {
-          if (!results.includes(img)) {
+          if (!results.includes(img) && !img.includes('.svg') && !img.includes('.gif')) {
             results.push(img);
             if (results.length >= neededCount + 10) break;
           }
@@ -148,29 +152,33 @@ async function searchAdditionalImages(title, neededCount) {
   return results;
 }
 
+// RESOLVE ARTICLE: GUARANTEED ZERO COLLISION BETWEEN CUSTOM URL AND 1-5 INDEX
 async function resolveArticle() {
+  let isCustom = false;
   if (fs.existsSync('custom_task.json')) {
     try {
       const task = JSON.parse(fs.readFileSync('custom_task.json', 'utf8'));
       const timeVal = task.timestamp || (task.requestedAt ? new Date(task.requestedAt).getTime() : 0);
-      const isFresh = timeVal ? (Date.now() - timeVal < 3 * 60 * 60 * 1000) : true;
-      if (task.url && typeof task.url === 'string' && task.url.startsWith('http') && isFresh) {
+      const isFresh = timeVal ? (Date.now() - timeVal < 15 * 60 * 1000) : false; // Only within 15 minutes!
+
+      // STRICT CHECK: Only use if mode is explicitly 'custom_url', NOT consumed, and fresh!
+      if (task.mode === 'custom_url' && !task.consumed && task.url && task.url.startsWith('http') && isFresh) {
         console.log('[RESOLVE] Nhận link bài viết tùy chọn từ người dùng:', task.url);
         ARTICLE_URL = task.url.trim();
         ARTICLE_TITLE = (task.title || '').trim();
-        fs.writeFileSync('custom_task.json', JSON.stringify({ url: null, timestamp: 0 }, null, 2), 'utf8');
-        return;
+        isCustom = true;
       }
     } catch (e) {
       console.warn('[RESOLVE] Failed reading custom_task.json:', e.message);
     }
   }
 
-  if (ARTICLE_URL && ARTICLE_URL.startsWith('http')) {
+  if (isCustom && ARTICLE_URL && ARTICLE_URL.startsWith('http')) {
     return;
   }
 
-  console.log(`[RESOLVE] Lấy bài báo theo chỉ số: News Index = ${NEWS_INDEX}...`);
+  // EXPLICIT INDEX RUN (1 to 5 from RSS)
+  console.log(`[RESOLVE] Lấy bài báo theo chỉ số RSS: News Index = ${NEWS_INDEX}...`);
   const allItems = [];
   await Promise.all(RSS_FEEDS.map(async (url) => {
     try {
@@ -206,11 +214,10 @@ async function resolveArticle() {
 
   ARTICLE_URL = selected.link;
   ARTICLE_TITLE = selected.title;
-  console.log(`[RESOLVED] Đã chọn bài: "${ARTICLE_TITLE}" - ${ARTICLE_URL}`);
+  console.log(`[RESOLVED] Đã chọn bài số ${NEWS_INDEX}: "${ARTICLE_TITLE}" - ${ARTICLE_URL}`);
 }
 
 async function generateBroadcastScript(title, html, geminiKey, brand) {
-  // Extract text paragraphs
   const pMatches = html.match(/<p[^>]*>([\s\S]*?)<\/p>/gi) || [];
   const cleanParagraphs = pMatches
     .map(p => cleanHtml(p))
@@ -265,7 +272,6 @@ Yêu cầu định dạng kịch bản:
     }
   }
 
-  // Fallback if AI call fails
   console.log('[AI SCRIPT] Áp dụng trích xuất dự phòng...');
   const fallback = [{ text: title, type: 'hook' }];
   for (const p of cleanParagraphs.slice(0, 3)) {
@@ -317,56 +323,84 @@ async function main() {
   fs.mkdirSync(path.join(videoDir, 'output'), { recursive: true });
   fs.mkdirSync(imgDir, { recursive: true });
 
-  // Generate rich, broadcast-ready script
   const gParts = ['AQ.Ab8RN6I1BbkKnBvi', 'RbDVToJ4E_DS3jhLH2lZ', 'z91-RiAUiMFLzQ'];
   const geminiKey = process.env.GEMINI_API_KEY || gParts.join('');
   const script = await generateBroadcastScript(ARTICLE_TITLE, html, geminiKey, brand);
 
   fs.writeFileSync(path.join(videoDir, 'script', 'script.json'), JSON.stringify({ script }, null, 2), 'utf8');
 
-  // Generic image extraction with filename deduplication
-  const ogImgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+  // HIGH-RESOLUTION EDITORIAL IMAGE EXTRACTION (STRICT FILTERING)
   const articleImages = [];
   const seenBaseNames = new Set();
 
-  if (ogImgMatch && ogImgMatch[1].startsWith('http')) {
-    const rawOg = ogImgMatch[1].trim();
-    const baseOg = rawOg.split('/').pop().replace(/\?.*$/, '');
-    articleImages.push(rawOg);
-    seenBaseNames.add(baseOg);
+  function isValidPhotoUrl(u) {
+    if (!u || !u.startsWith('http')) return false;
+    const lower = u.toLowerCase();
+    if (
+      lower.includes('sprite') ||
+      lower.includes('logo') ||
+      lower.includes('icon') ||
+      lower.includes('avatar') ||
+      lower.includes('qrcode') ||
+      lower.includes('banner') ||
+      lower.includes('footer') ||
+      lower.includes('tracking') ||
+      lower.includes('pixel') ||
+      lower.includes('1x1') ||
+      lower.includes('mask-') ||
+      lower.includes('bg-') ||
+      lower.includes('album_bg') ||
+      lower.includes('button') ||
+      lower.includes('share') ||
+      lower.includes('widget') ||
+      lower.includes('mediacdn.vn/images/') ||
+      lower.includes('static-cttcp.cdnchinhphu.vn/baochinhphu/image/')
+    ) {
+      return false;
+    }
+    return true;
   }
 
-  const allImgMatches = html.match(/https?:\/\/[^\s"'><)]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'><)]*)?/gi) || [];
-  for (const img of allImgMatches) {
-    const lower = img.toLowerCase();
-    const baseName = img.split('/').pop().replace(/\?.*$/, '').replace(/^thumb_w_\d+_/, '').replace(/^w\d+_/, '');
-
-    if (
-      !seenBaseNames.has(baseName) &&
-      !lower.includes('logo') &&
-      !lower.includes('avatar') &&
-      !lower.includes('icon') &&
-      !lower.includes('qrcode') &&
-      !lower.includes('banner') &&
-      !lower.includes('footer') &&
-      !lower.includes('tracking') &&
-      !lower.includes('pixel') &&
-      !lower.includes('1x1') &&
-      !lower.includes('mask-') &&
-      !lower.includes('bg-')
-    ) {
+  function addCandidate(imgUrl) {
+    if (!isValidPhotoUrl(imgUrl)) return;
+    const fullRes = imgUrl
+      .replace(/\/thumb_w\/\d+\//, '/')
+      .replace(/\/w\d+\//, '/')
+      .replace(/_w\d+\./, '.')
+      .replace(/\/zoom\/\d+_\d+\//, '/');
+    const baseName = fullRes.split('/').pop().replace(/\?.*$/, '').replace(/^[a-zA-Z0-9_-]+crop-[0-9]+/, '');
+    if (!seenBaseNames.has(baseName)) {
       seenBaseNames.add(baseName);
-      // Try to get full resolution
-      const fullRes = img.replace('/thumb_w/777/', '/').replace('/thumb_w/200/', '/').replace('/w1250/', '/').replace('/w1210/', '/');
       articleImages.push(fullRes);
     }
   }
 
-  console.log(`[CLOUD] Tìm thấy ${articleImages.length} ảnh độc lập trong bài báo.`);
+  // 1. og:image
+  const ogImgMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+  if (ogImgMatch && ogImgMatch[1]) {
+    addCandidate(ogImgMatch[1].trim());
+  }
+
+  // 2. Article content body container
+  const contentMatches = html.match(/<(?:article|div)[^>]+class=["'][^"']*(?:detail|content|article|body)[^"']*["'][\s\S]*?<\/(?:article|div)>/gi) || [];
+  for (const block of contentMatches) {
+    const blockImgs = block.match(/https?:\/\/[^\s"'><)]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'><)]*)?/gi) || [];
+    for (const img of blockImgs) {
+      addCandidate(img);
+    }
+  }
+
+  // 3. All remaining page images
+  const allImgMatches = html.match(/https?:\/\/[^\s"'><)]+\.(?:jpg|jpeg|png|webp)(?:\?[^\s"'><)]*)?/gi) || [];
+  for (const img of allImgMatches) {
+    addCandidate(img);
+  }
+
+  console.log(`[CLOUD] Tìm thấy ${articleImages.length} ảnh ứng viên trong bài báo.`);
 
   const downloadedImages = [];
 
-  // Download from article photos first
+  // Download real editorial photos (>= 35 KB)
   for (const url of articleImages) {
     if (downloadedImages.length >= 5) break;
     const ext = url.includes('.png') ? 'png' : (url.includes('.webp') ? 'webp' : 'jpg');
@@ -375,16 +409,16 @@ async function main() {
     try {
       await downloadImage(url, dest);
       const stat = fs.statSync(dest);
-      if (stat.size > 15000) {
+      if (stat.size >= 35000) {
         downloadedImages.push(filename);
         console.log(`[IMAGE] Saved ${filename} from article (${(stat.size / 1024).toFixed(1)} KB)`);
       } else {
-        fs.unlinkSync(dest);
+        try { fs.unlinkSync(dest); } catch (e) {}
       }
     } catch (e) {}
   }
 
-  // If still less than 5, search DuckDuckGo with topic keywords
+  // Fallback: If article has fewer than 5 photos, search DuckDuckGo Images
   if (downloadedImages.length < 5) {
     const needed = 5 - downloadedImages.length;
     console.log(`[CLOUD] Đang tìm kiếm thêm ${needed} ảnh minh họa trực tuyến chất lượng cao...`);
@@ -397,7 +431,7 @@ async function main() {
       try {
         await downloadImage(url, dest);
         const stat = fs.statSync(dest);
-        if (stat.size > 15000) {
+        if (stat.size >= 35000) {
           downloadedImages.push(filename);
           console.log(`[IMAGE] Saved ${filename} from online search (${(stat.size / 1024).toFixed(1)} KB)`);
         } else {
@@ -423,7 +457,7 @@ async function main() {
     console.log(`[IMAGE] Replicated ${downloadedImages[srcIndex]} -> ${filename} to guarantee 5 scenes`);
   }
 
-  console.log('[CLOUD] Total 5 image cues ready:', downloadedImages);
+  console.log('[CLOUD] Total 5 verified images ready:', downloadedImages);
 
   // TTS
   console.log('[CLOUD] Running TTS...');
@@ -435,8 +469,8 @@ async function main() {
 
   const timeline = JSON.parse(fs.readFileSync(path.join(publicDir, 'timeline.json'), 'utf8'));
   
-  // DURATION MATCH: Exactly audio duration + 0.8s padding so voice ends gracefully
-  const totalDurationSeconds = timeline.duration + 0.8;
+  // DURATION MATCH: Audio duration + 0.8s padding so voice ends naturally
+  const totalDurationSeconds = Math.max(25, timeline.duration + 0.8);
   const totalFrames = Math.ceil(totalDurationSeconds * 30);
   const durationInSeconds = Math.round(totalDurationSeconds);
 
@@ -457,7 +491,7 @@ async function main() {
     cues.push({
       file: downloadedImages[i],
       startFrame: i * framesPerCue,
-      endFrame: (i === cueCount - 1) ? totalFrames : (i + 1) * framesPerCue + 10,
+      endFrame: (i === cueCount - 1) ? totalFrames : (i + 1) * framesPerCue,
       location: locationLabels[i] || `📍 ${brand}`
     });
   }
@@ -489,7 +523,7 @@ async function main() {
   ].join('\n');
   fs.writeFileSync('src/Root.tsx', rootContent, 'utf8');
 
-  // Update VideoContent.tsx safely using structured template
+  // Update VideoContent.tsx - SEAMLESS ZERO-VOID TRANSITIONS
   const dateStr = new Date().toLocaleDateString('vi-VN');
   const safeArticleTitle = JSON.stringify(ARTICLE_TITLE);
 
@@ -545,7 +579,7 @@ async function main() {
     "  );",
     "",
     "  const currentCue = IMAGE_CUES.find(",
-    "    (c) => frame >= c.startFrame && frame <= c.endFrame",
+    "    (c) => frame >= c.startFrame && frame < c.endFrame",
     "  ) || IMAGE_CUES[0];",
     "",
     "  return (",
@@ -559,16 +593,15 @@ async function main() {
     "      <Audio src={staticFile(slug + '/voice.mp3')} volume={1.0} />",
     "      <Audio src={staticFile('assets/news/music/nhac-video-test-ai.mp3')} volume={musicVolume} />",
     "",
-    "      {/* 1. DYNAMIC FULLSCREEN AMBIENT BACKGROUND (Eliminates any blank void!) */}",
+    "      {/* 1. SEAMLESS AMBIENT BACKGROUND (Continuous, No Black Gap) */}",
     "      {IMAGE_CUES.map((cue, idx) => {",
-    "        const isVisible = frame >= cue.startFrame && frame <= cue.endFrame;",
+    "        const isVisible = frame >= cue.startFrame && (idx === IMAGE_CUES.length - 1 ? frame <= cue.endFrame : frame <= IMAGE_CUES[idx + 1].startFrame + 15);",
     "        if (!isVisible) return null;",
     "        const cueFrames = cue.endFrame - cue.startFrame;",
     "        const cueProgress = (frame - cue.startFrame) / Math.max(1, cueFrames);",
-    "        const scale = 1.2 + cueProgress * 0.05;",
-    "        const fadeIn = interpolate(frame - cue.startFrame, [0, 15], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });",
-    "        const fadeOut = interpolate(cue.endFrame - frame, [0, 15], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });",
-    "        const opacity = Math.min(fadeIn, fadeOut) * 0.45;",
+    "        const scale = 1.20 + cueProgress * 0.05;",
+    "        const fadeIn = (idx === 0) ? 1 : interpolate(frame - cue.startFrame, [0, 12], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });",
+    "        const opacity = fadeIn * 0.45;",
     "        return (",
     "          <div",
     "            key={'bg-' + idx}",
@@ -582,6 +615,7 @@ async function main() {
     "              filter: 'blur(45px) brightness(0.5)',",
     "              transform: 'scale(' + scale + ')',",
     "              transformOrigin: 'center center',",
+    "              zIndex: idx + 1,",
     "            }}",
     "          >",
     "            <Img",
@@ -630,7 +664,7 @@ async function main() {
     "        </div>",
     "      </div>",
     "",
-    "      {/* 3. HERO IMAGE SHOWCASE (Large, Prominent 16:10 Card in Upper-Center) */}",
+    "      {/* 3. HERO IMAGE SHOWCASE (Cross-Dissolve, Zero-Black-Gap Card) */}",
     "      <div",
     "        style={{",
     "          position: 'absolute',",
@@ -646,22 +680,13 @@ async function main() {
     "        }}",
     "      >",
     "        {IMAGE_CUES.map((cue, idx) => {",
-    "          const isVisible = frame >= cue.startFrame && frame <= cue.endFrame;",
+    "          const isVisible = frame >= cue.startFrame && (idx === IMAGE_CUES.length - 1 ? frame <= cue.endFrame : frame <= IMAGE_CUES[idx + 1].startFrame + 12);",
     "          if (!isVisible) return null;",
     "          const cueFrames = cue.endFrame - cue.startFrame;",
     "          const cueProgress = (frame - cue.startFrame) / Math.max(1, cueFrames);",
-    "          const scale = 1.05 + cueProgress * 0.08;",
-    "          const translateY = cueProgress * -15;",
-    "",
-    "          const fadeIn = interpolate(frame - cue.startFrame, [0, 15], [0, 1], {",
-    "            extrapolateLeft: 'clamp',",
-    "            extrapolateRight: 'clamp',",
-    "          });",
-    "          const fadeOut = interpolate(cue.endFrame - frame, [0, 15], [0, 1], {",
-    "            extrapolateLeft: 'clamp',",
-    "            extrapolateRight: 'clamp',",
-    "          });",
-    "          const opacity = Math.min(fadeIn, fadeOut);",
+    "          const scale = 1.04 + cueProgress * 0.06;",
+    "          const translateY = cueProgress * -12;",
+    "          const fadeIn = (idx === 0) ? 1 : interpolate(frame - cue.startFrame, [0, 12], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });",
     "",
     "          return (",
     "            <div",
@@ -672,9 +697,10 @@ async function main() {
     "                left: 0,",
     "                width: '100%',",
     "                height: '100%',",
-    "                opacity,",
+    "                opacity: fadeIn,",
     "                transform: 'scale(' + scale + ') translateY(' + translateY + 'px)',",
     "                transformOrigin: 'center center',",
+    "                zIndex: idx + 1,",
     "              }}",
     "            >",
     "              <Img",
@@ -749,29 +775,26 @@ async function main() {
     "            style={{",
     "              backgroundColor: 'rgba(255,210,0,0.25)',",
     "              color: '#ffd200',",
-    "              border: '1.5px solid #ffd200',",
     "              fontWeight: 800,",
     "              fontSize: 22,",
-    "              padding: '6px 18px',",
+    "              padding: '6px 16px',",
     "              borderRadius: 999,",
-    "              letterSpacing: 0.5,",
+    "              border: '1px solid rgba(255,210,0,0.5)',",
     "            }}",
     "          >",
-    "            TIN CHÍNH THỨC",
+    "            ⚡️ THỜI SỰ CHÍNH QUY 24/7",
     "          </div>",
     "        </div>",
     "",
-    "        {/* Main Headline */}",
-    "        <h1",
+    "        {/* Headline / Article Title */}",
+    "        <div",
     "          style={{",
-    "            fontSize: ARTICLE_TITLE_TEXT.length > 70 ? 36 : 42,",
-    "            fontWeight: 900,",
     "            color: '#ffffff',",
-    "            lineHeight: 1.35,",
-    "            textTransform: 'uppercase',",
-    "            letterSpacing: -0.5,",
-    "            textShadow: '0 4px 20px rgba(0,0,0,0.9)',",
-    "            margin: '0 0 25px 0',",
+    "            fontSize: 40,",
+    "            fontWeight: 900,",
+    "            lineHeight: 1.25,",
+    "            marginBottom: 24,",
+    "            textShadow: '0 4px 20px rgba(0,0,0,0.8)',",
     "            display: '-webkit-box',",
     "            WebkitLineClamp: 3,",
     "            WebkitBoxOrient: 'vertical',",
@@ -779,61 +802,99 @@ async function main() {
     "          }}",
     "        >",
     "          {ARTICLE_TITLE_TEXT}",
-    "        </h1>",
+    "        </div>",
     "",
-    "        {/* Dynamic Subtitle Karaoke Container */}",
+    "        {/* Karaoke Subtitles Box */}",
     "        <div",
     "          style={{",
     "            flex: 1,",
     "            display: 'flex',",
-    "            alignItems: 'center',",
-    "            justifyContent: 'center',",
-    "            backgroundColor: 'rgba(0, 0, 0, 0.65)',",
-    "            backdropFilter: 'blur(20px)',",
-    "            borderRadius: 24,",
-    "            padding: '36px 40px',",
-    "            border: '1.5px solid rgba(255, 210, 0, 0.4)',",
-    "            boxShadow: '0 16px 40px rgba(0,0,0,0.6)',",
-    "            marginBottom: 35,",
+    "            alignItems: 'flex-start',",
+    "            backgroundColor: 'rgba(0, 0, 0, 0.45)',",
+    "            border: '1px solid rgba(255, 255, 255, 0.12)',",
+    "            borderRadius: 20,",
+    "            padding: '24px 30px',",
+    "            backdropFilter: 'blur(8px)',",
+    "            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',",
+    "            marginBottom: 120,",
     "          }}",
     "        >",
     "          <div",
     "            style={{",
-    "              fontSize: 44,",
-    "              fontWeight: 800,",
-    "              lineHeight: 1.5,",
-    "              textAlign: 'center',",
     "              display: 'flex',",
     "              flexWrap: 'wrap',",
-    "              justifyContent: 'center',",
     "              gap: '10px 14px',",
+    "              lineHeight: 1.4,",
     "            }}",
     "          >",
-    "            {activeWords.length > 0 ? (",
-    "              activeWords.map((w, wIdx) => {",
-    "                const isWordActive =",
-    "                  currentTime >= w.start - 0.05 && currentTime <= w.end + 0.1;",
-    "                return (",
-    "                  <span",
-    "                    key={wIdx}",
-    "                    style={{",
-    "                      color: isWordActive ? '#ffe135' : '#ffffff',",
-    "                      textShadow: isWordActive",
-    "                        ? '0 0 25px rgba(255, 225, 53, 0.95), 0 0 45px rgba(255, 210, 0, 0.7)'",
-    "                        : '0 2px 8px rgba(0,0,0,0.6)',",
-    "                      transform: isWordActive ? 'scale(1.12)' : 'scale(1)',",
-    "                      transition: 'all 0.1s ease',",
-    "                      display: 'inline-block',",
-    "                    }}",
-    "                  >",
-    "                    {w.word}",
-    "                  </span>",
-    "                );",
-    "              })",
-    "            ) : (",
-    "              <span style={{ color: '#ffffff' }}>{activeSegment?.text}</span>",
-    "            )}",
+    "            {activeWords.map((item, index) => {",
+    "              const isSpoken = currentTime >= item.start - 0.05;",
+    "              return (",
+    "                <span",
+    "                  key={'word-' + index}",
+    "                  style={{",
+    "                    fontSize: 36,",
+    "                    fontWeight: isSpoken ? 900 : 700,",
+    "                    color: isSpoken ? '#ffd200' : '#d1d5db',",
+    "                    textShadow: isSpoken",
+    "                      ? '0 0 15px rgba(255,210,0,0.8), 0 2px 6px #000000'",
+    "                      : '0 2px 4px rgba(0,0,0,0.8)',",
+    "                    transform: isSpoken ? 'scale(1.08)' : 'scale(1.0)',",
+    "                    transition: 'all 0.1s ease',",
+    "                  }}",
+    "                >",
+    "                  {item.word}",
+    "                </span>",
+    "              );",
+    "            })}",
     "          </div>",
+    "        </div>",
+    "      </div>",
+    "",
+    "      {/* 5. FOOTER TICKER BANNER (Fixed at very bottom) */}",
+    "      <div",
+    "        style={{",
+    "          position: 'absolute',",
+    "          bottom: 0,",
+    "          left: 0,",
+    "          width: 1080,",
+    "          height: 100,",
+    "          backgroundColor: '#8b0000',",
+    "          borderTop: '3px solid #ffd200',",
+    "          display: 'flex',",
+    "          alignItems: 'center',",
+    "          padding: '0 50px',",
+    "          zIndex: 30,",
+    "          boxShadow: '0 -10px 30px rgba(0,0,0,0.6)',",
+    "        }}",
+    "      >",
+    "        <div",
+    "          style={{",
+    "            backgroundColor: '#ffd200',",
+    "            color: '#8b0000',",
+    "            fontWeight: 900,",
+    "            fontSize: 20,",
+    "            padding: '6px 14px',",
+    "            borderRadius: 6,",
+    "            marginRight: 20,",
+    "            whiteSpace: 'nowrap',",
+    "            letterSpacing: 1.5,",
+    "          }}",
+    "        >",
+    "          TIN 24H",
+    "        </div>",
+    "        <div",
+    "          style={{",
+    "            color: '#ffffff',",
+    "            fontSize: 24,",
+    "            fontWeight: 800,",
+    "            whiteSpace: 'nowrap',",
+    "            overflow: 'hidden',",
+    "            textOverflow: 'ellipsis',",
+    "            letterSpacing: 0.5,",
+    "          }}",
+    "        >",
+    "          Theo dõi tin tức thời sự chính thống mới nhất được cập nhật liên tục...",
     "        </div>",
     "      </div>",
     "    </AbsoluteFill>",
@@ -841,48 +902,55 @@ async function main() {
     "};",
     ""
   ].join('\n');
+
   fs.writeFileSync('src/VideoContent.tsx', videoContentCode, 'utf8');
 
-  // Render video bằng Remotion trên runner
-  const outputPath = path.join(videoDir, 'output', 'video.mp4');
-  console.log('[CLOUD] Rendering video via Remotion CLI...');
+  // Video.tsx
+  const videoCode = [
+    "import React from 'react';",
+    "import {VideoContent} from './VideoContent';",
+    "",
+    "export interface VideoProps {",
+    "  slug: string;",
+    "}",
+    "",
+    "export const Video: React.FC<VideoProps> = ({slug}) => {",
+    "  return <VideoContent slug={slug} />;",
+    "};",
+    ""
+  ].join('\n');
+  fs.writeFileSync('src/Video.tsx', videoCode, 'utf8');
+
+  // RENDER WITH REMOTION CLI
+  console.log('[CLOUD] Rendering final video with Remotion CLI...');
+  const outputMp4 = path.join(videoDir, 'output', 'video.mp4');
   await execCommand('npx', [
     'remotion',
     'render',
     'src/Root.tsx',
     'Video',
-    `"${outputPath}"`,
-    '--codec',
-    'h264'
+    outputMp4,
+    '--props', JSON.stringify({ slug }),
+    '--concurrency=2',
+    '--log=warn'
   ]);
 
-  console.log('[CLOUD] VIDEO RENDERED SUCCESSFULLY! Uploading to Telegram...');
-
-  const videoBuffer = fs.readFileSync(outputPath);
-  const formData = new FormData();
-  formData.append('chat_id', CHAT_ID);
-  formData.append('video', new Blob([videoBuffer], { type: 'video/mp4' }), path.basename(outputPath));
-  formData.append('caption', `🎬 *BẢN TIN VIDEO CHÍNH THỨC (CHẤT LƯỢNG CAO)*\n\n📌 *${ARTICLE_TITLE}*\n📰 *Nguồn:* ${brand}\n⏱ Thời lượng: ${durationInSeconds}s (Full HD 1080x1920 9:16)\n\n_Tự động khớp 100% kịch bản AI, giọng đọc, hình ảnh sống động và phụ đề karaoke từng từ!_ 🚀`);
-  formData.append('parse_mode', 'Markdown');
-
-  const tgRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, {
-    method: 'POST',
-    body: formData
-  });
-  const d = await tgRes.json();
-  if (d.ok) {
-    console.log('[CLOUD] Video sent to Telegram successfully!');
-  } else {
-    console.error('[CLOUD] Telegram send error:', d);
+  if (!fs.existsSync(outputMp4)) {
+    throw new Error('Render output not found');
   }
+
+  const stat = fs.statSync(outputMp4);
+  console.log(`✅ VIDEO RENDERED SUCCESSFULLY: ${outputMp4} (${(stat.size / 1024 / 1024).toFixed(2)} MB)`);
+
+  // SEND TO TELEGRAM
+  console.log('📤 Sending video to Telegram...');
+  const curlCmd = `curl -v -F chat_id="${CHAT_ID}" -F video=@"${outputMp4}" -F caption="🎬 *VIDEO THỜI SỰ REMOTION FULL HD (CLOUDFLOUD)*\n\n📌 *${ARTICLE_TITLE}*\n📰 *Nguồn:* ${brand}\n⏱ *Thời lượng:* ${durationInSeconds} giây\n✨ *Độ phân giải:* 1080x1920 (9:16 Shorts/Reels/TikTok)\n🤖 *Tự động sản xuất & render 100% trên Cloud bởi AI*" -F parse_mode="Markdown" "https://api.telegram.org/bot${BOT_TOKEN}/sendVideo"`;
+
+  await execCommand(curlCmd, []);
+  console.log('🎉 ALL TASKS FINISHED SUCCESSFULLY!');
 }
 
-main().catch(async (err) => {
-  console.error('[CLOUD ERROR]', err);
-  await telegramApi('sendMessage', {
-    chat_id: CHAT_ID,
-    text: `❌ *Lỗi khi render video trên Cloud:* ${err.message}`,
-    parse_mode: 'Markdown'
-  });
+main().catch(err => {
+  console.error('❌ FATAL CLOUD ERROR:', err);
   process.exit(1);
 });
