@@ -15,13 +15,6 @@ function cleanHtml(html) {
 }
 
 async function run() {
-  try {
-    const upRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?limit=5`);
-    const upData = await upRes.json();
-    console.log('[TELEGRAM UPDATES LOG]:', JSON.stringify(upData, null, 2));
-  } catch (e) {
-    console.error('getUpdates error:', e.message);
-  }
   console.log('🤖 SCANNING REAL-TIME NEWS ON GITHUB CLOUD (24/7)...');
   try {
     const allItems = [];
@@ -64,31 +57,32 @@ async function run() {
       textList += `${idx + 1}. *${it.title}*\n🔗 [Đọc bài viết](${it.link})\n\n`;
     });
 
-    const runActionUrl = 'https://github.com/maihieuhieu98-ux/daily-news-bot/actions/workflows/make-video.yml';
-
-    const message = `⚡️ *BẢN TIN BÁO CHÍNH PHỦ THỜI GIAN THỰC (CLOUDFLOUD 24/7)*\n\n` +
+    const message = `⚡️ *BẢN TIN BÁO CHÍNH PHỦ THỜI GIAN THỰC (CLOUD 24/7)*\n\n` +
       `⏰ *Cập nhật:* ${timeStr} - ${dateStr}\n\n` +
       `📌 *TOP 5 TIN TỨC MỚI NHẤT VỪA ĐĂNG TẢI:*\n\n` +
       textList +
-      `🎬 *TẠO VIDEO TRÊN ĐIỆN THOẠI (100% KHÔNG CẦN MÁY TÍNH):*\n` +
-      `1. Bấm nút *[🎬 TẠO VIDEO REMOTION TRÊN CLOUD]* bên dưới\n` +
-      `2. Chọn nút *Run workflow* màu xanh trên điện thoại\n` +
-      `3. Chọn số thứ tự bài báo (1 - 5) rồi bấm Run ➔ Video Full HD sẽ tự gửi về Telegram cho bạn sau 2 phút!`;
+      `🎬 *CÁCH TẠO VIDEO TRỰC TIẾP TRÊN ĐIỆN THOẠI:*\n` +
+      `• Nhấn trực tiếp nút *[🎬 Tạo video bài 1..5]* bên dưới\n` +
+      `• Hoặc gõ số *1*, *2*, *3*, *4*, *5* gửi tin nhắn cho bot\n` +
+      `• Hoặc gửi bất kỳ link bài báo nào vào đây để làm video!`;
 
     const controllerUrl = 'https://maihieuhieu98-ux.github.io/daily-news-bot/';
 
     const inline_keyboard = [
       [
-        {
-          text: '⚡️ BẤM VÀO ĐÂY ĐỂ CẬP NHẬT TIN MỚI NGAY',
-          url: controllerUrl
-        }
+        { text: '🎬 Tạo bài 1', callback_data: 'make_video_index_1' },
+        { text: '🎬 Tạo bài 2', callback_data: 'make_video_index_2' }
       ],
       [
-        {
-          text: '🎬 BẤM VÀO ĐÂY ĐỂ TẠO VIDEO (1-5)',
-          url: controllerUrl
-        }
+        { text: '🎬 Tạo bài 3', callback_data: 'make_video_index_3' },
+        { text: '🎬 Tạo bài 4', callback_data: 'make_video_index_4' }
+      ],
+      [
+        { text: '🎬 Tạo bài 5', callback_data: 'make_video_index_5' }
+      ],
+      [
+        { text: '⚡️ Quét tin tức mới ngay', url: controllerUrl },
+        { text: '🌐 Mở Bảng Điều Khiển Web', url: controllerUrl }
       ]
     ];
 
