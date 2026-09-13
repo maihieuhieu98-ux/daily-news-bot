@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://www.24h.com.vn/tin-tuc-quoc-te/indonesia-tau-cho-hon-240-nguoi-duoc-bao-cao-mat-tich-tren-bien-ly-do-la-gi-c415a1794470.html",
-  "consumed": false,
-  "timestamp": 1789313323132
+  "mode": "index",
+  "index": 1,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789320778546
 }
