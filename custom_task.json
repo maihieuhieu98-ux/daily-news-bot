@@ -1,7 +1,6 @@
 {
-  "mode": "index",
-  "index": 1,
-  "url": null,
-  "consumed": true,
-  "timestamp": 1789382993944
+  "mode": "custom_url",
+  "url": "https://dantri.com.vn/thoi-su/con-gai-trung-ta-tran-van-tung-me-oi-dung-khoc-bo-di-cong-tac-ma-20260914183856968.htm",
+  "consumed": false,
+  "timestamp": 1789391147418
 }
