@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://share.google/8tDwb0r6uLxk8VYw1",
-  "consumed": false,
-  "timestamp": 1789379379973
+  "mode": "index",
+  "index": 1,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789379935377
 }
