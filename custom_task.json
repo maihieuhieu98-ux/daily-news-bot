@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://tuoitre.vn/truc-tuyen-u23-viet-nam-u23-kuwait-17h-huong-toi-3-diem-100260915112628866.htm",
-  "consumed": false,
-  "timestamp": 1789478059288
+  "mode": "index",
+  "index": 4,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789478392385
 }
