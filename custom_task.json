@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://www.qdnd.vn/quoc-te/doi-ngoai-quoc-phong/dai-tuong-phan-van-giang-tham-du-dien-dan-huong-son-bac-kinh-1057001",
-  "consumed": false,
-  "timestamp": 1789535186441
+  "mode": "index",
+  "index": 3,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789535478213
 }
