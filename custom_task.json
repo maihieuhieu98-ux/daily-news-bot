@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://vietnamnet.vn/nha-vua-thai-lan-va-hoang-hau-le-phat-tai-chua-quan-su-2555717.html",
-  "consumed": false,
-  "timestamp": 1789543973925
+  "mode": "index",
+  "index": 2,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789545821439
 }
