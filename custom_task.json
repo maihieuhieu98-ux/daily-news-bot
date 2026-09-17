@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://vnexpress.net/tong-bi-thu-chu-tich-nuoc-to-lam-sap-cong-du-my-canada-5121437.html",
-  "consumed": false,
-  "timestamp": 1789639974235
+  "mode": "index",
+  "index": 1,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789641738097
 }
