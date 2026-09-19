@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://dantri.com.vn/phap-luat/vu-xuong-nguoi-trong-o-to-mot-nguoi-mat-tich-bi-an-trong-chuyen-di-thu-no-20260918160041680.htm",
-  "consumed": false,
-  "timestamp": 1789737340094
+  "mode": "index",
+  "index": 3,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1789814130181
 }
