@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://tienphong.vn/tham-an-tai-dong-nai-toa-nhan-dinh-gi-ve-bi-cao-khi-tuyen-tu-hinh-post1882630.tpo",
-  "consumed": false,
-  "timestamp": 1791297750576
+  "mode": "index",
+  "index": 1,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1791297860894
 }
