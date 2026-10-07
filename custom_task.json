@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://vietnamnet.vn/xung-luc-moi-tu-chuyen-tham-dau-tien-cua-thu-tuong-toi-lao-campuchia-2562418.html",
-  "consumed": false,
-  "timestamp": 1791357085281
+  "mode": "index",
+  "index": 5,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1791366113498
 }
