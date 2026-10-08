@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://vietnamnet.vn/bo-chinh-tri-ban-bi-thu-hop-giai-trinh-y-kien-thao-luan-cua-trung-uong-2562569.html",
-  "consumed": false,
-  "timestamp": 1791377222649
+  "mode": "index",
+  "index": 2,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1791445702628
 }
