@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://tuoitre.vn/chu-tich-quoc-hoi-tran-thanh-man-sap-tham-chinh-thuc-trung-quoc-100261008153152251.htm",
-  "consumed": false,
-  "timestamp": 1791453898678
+  "mode": "index",
+  "index": 1,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1791454315973
 }
