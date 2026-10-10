@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://www.vietnamplus.vn/thu-tuong-le-minh-hung-chao-quoc-vuong-campuchia-post1141173.vnp",
-  "consumed": false,
-  "timestamp": 1791617235160
+  "mode": "index",
+  "index": 4,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1791622903298
 }
