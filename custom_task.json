@@ -1,6 +1,7 @@
 {
-  "mode": "custom_url",
-  "url": "https://laodong.vn/thoi-su/viet-nam-luon-ung-ho-manh-me-cong-cuoc-doi-moi-xay-dung-va-phat-trien-dat-nuoc-lao-1783295.ldo",
-  "consumed": false,
-  "timestamp": 1792030223163
+  "mode": "index",
+  "index": 1,
+  "url": null,
+  "consumed": true,
+  "timestamp": 1792406201449
 }
